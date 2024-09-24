@@ -1,0 +1,4 @@
+*.o
+whippet*
+scheme
+scheme_malloc*

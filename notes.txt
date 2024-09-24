@@ -1,0 +1,3 @@
+Is there a race condition when we allocate an object? Like, what if a collection starts before we initialize it?
+If allocation fails the program dies, which sucks.
+Only supported platform is GNU/Linux currently.
