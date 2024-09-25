@@ -109,14 +109,14 @@ visit_buckets_fields(buckets_s* buckets, visitor visit,
 
 #define DEFINE_SIZEOF(name)                             \
   static inline size_t name##_size(name##_s *name) {    \
-    return sizeof(name);                                \
+    return sizeof(name##_s);                            \
   }
 
 DEFINE_SIZEOF(pair);
 DEFINE_SIZEOF(promise);
 
 static inline size_t symbol_size(symbol_s *s) {
-  return sizeof(symbol_s) + s->length;
+  return sizeof(symbol_s) + s->length+1;
 }
 
 DEFINE_SIZEOF(integer);
@@ -124,7 +124,7 @@ DEFINE_SIZEOF(special);
 DEFINE_SIZEOF(operator);
 
 static inline size_t string_size(string_s *s) {
-  return sizeof(string_s) + s->length;
+  return sizeof(string_s) + s->length+1;
 }
 
 DEFINE_SIZEOF(port);

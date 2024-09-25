@@ -109,6 +109,8 @@ static char error_message[MSGMAX+1];
 
 // The Whippet mutator for a thread.
 thread_local struct gc_mutator *mutator;
+// Stats collector.
+thread_local struct gc_basic_stats gcstats;
 
 /* SUPPORT FUNCTIONS */
 
@@ -3240,6 +3242,15 @@ static obj_t entry_gc(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   return obj_undefined;
 }
 
+// Print statistics since the last GC.
+static obj_t entry_room(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
+{
+  eval_args(operator->operator.name, env, op_env, operands, 0);
+  gc_basic_stats_finish(&gcstats);
+  gc_basic_stats_print(&gcstats, stdout);
+  return obj_undefined;
+}
+
 
 /* INITIALIZATION */
 
@@ -3378,6 +3389,7 @@ static struct {char *name; entry_t entry;} funtab[] = {
   {"eq-hash", entry_eq_hash},
   {"eqv-hash", entry_eqv_hash},
   {"gc", entry_gc},
+  {"room", entry_room},
 };
 
 
@@ -3394,8 +3406,7 @@ int main(int argc, char *argv[])
     error("Failed to set GC options: '%s'\n", optstr);
 
   struct gc_heap *heap;
-  struct gc_basic_stats stats;
-  if (!gc_init(options, NULL, &heap, &mutator, GC_BASIC_STATS, &stats))
+  if (!gc_init(options, NULL, &heap, &mutator, GC_BASIC_STATS, &gcstats))
     error("Failed to initialize GC");
   
   // Scheme
