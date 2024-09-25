@@ -181,7 +181,9 @@ static inline void visit_roots(struct handle *roots,
                                struct gc_heap *heap,
                                void *trace_data) {
   for (struct handle *h = roots; h; h = h->next)
-    trace_edge(gc_edge(&h->v), heap, trace_data);
+    for (size_t i = 0; i < h->nptrs; ++i)
+      if (h->v[i])
+        trace_edge(gc_edge(&h->v[i]), heap, trace_data);
 }
 
 static inline void gc_trace_mutator_roots(struct gc_mutator_roots *roots,

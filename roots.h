@@ -1,7 +1,8 @@
 #pragma once
 
 struct handle {
-  void *v;
+  size_t nptrs;
+  void **v;
   struct handle *next;
 };
 

@@ -24,6 +24,7 @@
 #include <threads.h> // thread_local
 
 #include "object.h"
+#include "roots.h"
 #include "allocate.h"
 #include "gc-api.h"
 #include "gc-basic-stats.h"
@@ -42,6 +43,10 @@
 
 /* GLOBAL DATA */
 
+static struct gc_heap_roots global_roots = {.roots = NULL};
+struct handle *add_heap_root(void**, size_t);
+bool remove_heap_root(struct handle*);
+
 /* symtab -- symbol table
  *
  * The symbol table is a hash-table containing objects of TYPE_SYMBOL.
@@ -52,7 +57,8 @@
 
 static obj_t *symtab;
 static size_t symtab_size;
-
+// GC root representing the above
+struct handle *symtab_root;
 
 /* special objects
  *
@@ -360,6 +366,7 @@ static obj_t *find(char *string) {
 static void rehash(void) {
   obj_t *old_symtab = symtab;
   unsigned old_symtab_size = symtab_size;
+  struct handle *old_symtab_root = symtab_root;
   unsigned i;
 
   symtab_size *= 2;
@@ -377,6 +384,10 @@ static void rehash(void) {
       assert(*where == NULL);   /* shouldn't be in new table */
       *where = old_symtab[i];
     }
+
+  // Now that the new symtab is in place, inform the GC.
+  symtab_root = add_heap_root((void**)symtab, symtab_size);
+  remove_heap_root(old_symtab_root);
 
   free(old_symtab);
 }
@@ -3238,7 +3249,7 @@ static obj_t entry_hashtable_keys(obj_t env, obj_t op_env, obj_t operator, obj_t
 static obj_t entry_gc(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   eval_args(operator->operator.name, env, op_env, operands, 0);
-  /* Nothing to do! */
+  gc_collect(mutator, GC_COLLECTION_ANY);
   return obj_undefined;
 }
 
@@ -3392,6 +3403,36 @@ static struct {char *name; entry_t entry;} funtab[] = {
   {"room", entry_room},
 };
 
+/* more GC interactions */
+
+struct handle* add_heap_root(void **ptrs, size_t nptrs) {
+  struct handle *old_roots = global_roots.roots;
+  struct handle *n = malloc(sizeof(struct handle));
+  n->nptrs = nptrs; n->v = ptrs;
+  n->next = old_roots;
+  global_roots.roots = n;
+  return n;
+}
+// return true if the root was actually present
+// dunno that anything needs to know but w/e
+// anyway this is a basic linked list delete.
+bool remove_heap_root(struct handle *old) {
+  struct handle *cur = global_roots.roots;
+  if (cur == old) {
+    global_roots.roots = old->next;
+    free(old);
+    return true;
+  } else {
+    while (cur) {
+      if (cur->next == old) {
+        cur->next = old->next;
+        free(old);
+        return true;
+      } else cur = cur->next;
+    }
+    return false;
+  }
+}
 
 /* MAIN PROGRAM */
 
@@ -3408,6 +3449,8 @@ int main(int argc, char *argv[])
   struct gc_heap *heap;
   if (!gc_init(options, NULL, &heap, &mutator, GC_BASIC_STATS, &gcstats))
     error("Failed to initialize GC");
+
+  gc_heap_set_roots(heap, &global_roots);
   
   // Scheme
   FILE *input = stdin;
@@ -3421,11 +3464,15 @@ int main(int argc, char *argv[])
   for(i = 0; i < symtab_size; ++i)
     symtab[i] = NULL;
 
+  // Register symtab root
+  symtab_root = add_heap_root((void**)symtab, symtab_size);
+
   error_handler = &jb;
 
   if(!setjmp(*error_handler)) {
     for(i = 0; i < LENGTH(sptab); ++i)
       *sptab[i].varp = make_special(sptab[i].name);
+    
     for(i = 0; i < LENGTH(isymtab); ++i)
       *isymtab[i].varp = intern(isymtab[i].name);
     env = make_pair(obj_empty, obj_empty);
