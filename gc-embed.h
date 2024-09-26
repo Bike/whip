@@ -105,43 +105,6 @@ visit_buckets_fields(buckets_s* buckets, visitor visit,
 
 #undef DEFINE_FIELDLESS
 
-/* GC sizing */
-
-#define DEFINE_SIZEOF(name)                             \
-  static inline size_t name##_size(name##_s *name) {    \
-    return sizeof(name##_s);                            \
-  }
-
-DEFINE_SIZEOF(pair);
-DEFINE_SIZEOF(promise);
-
-static inline size_t symbol_size(symbol_s *s) {
-  return sizeof(symbol_s) + s->length+1;
-}
-
-DEFINE_SIZEOF(integer);
-DEFINE_SIZEOF(special);
-DEFINE_SIZEOF(operator);
-
-static inline size_t string_size(string_s *s) {
-  return sizeof(string_s) + s->length+1;
-}
-
-DEFINE_SIZEOF(port);
-DEFINE_SIZEOF(character);
-
-static inline size_t vector_size(vector_s *v) {
-  return sizeof(vector_s) + v->length * sizeof(obj_t);
-}
-
-DEFINE_SIZEOF(table);
-
-static inline size_t buckets_size(buckets_s *b) {
-  return sizeof(buckets_s) + b->length * 2 * sizeof(obj_t);
-}
-
-#undef DEFINE_SIZEOF
-
 /* GC trace */
 
 static inline uintptr_t* header_word(struct gc_ref ref) {
@@ -163,7 +126,7 @@ static inline void gc_trace_object(struct gc_ref ref,
         visit_##name##_fields(gc_ref_heap_object(ref), trace_edge,      \
                               heap, trace_data);                        \
       if (size)                                                         \
-        *size = name##_size(gc_ref_heap_object(ref));                   \
+        *size = name##_osize(gc_ref_heap_object(ref));                  \
       break;
     FOR_EACH_HEAP_OBJECT_KIND(SCAN_OBJECT)
 #undef SCAN_OBJECT
@@ -290,7 +253,7 @@ gc_atomic_forward_object_size(struct gc_atomic_forward *fwd) {
   switch (header_live_alloc_kind(fwd->data)) {
 #define OBJECT_SIZE(name, Name, NAME)                                   \
     case TYPE_##NAME:                                                   \
-      return name##_size(gc_ref_heap_object(fwd->ref));
+      return name##_osize(gc_ref_heap_object(fwd->ref));
     FOR_EACH_HEAP_OBJECT_KIND(OBJECT_SIZE)
 #undef OBJECT_SIZE
   default:

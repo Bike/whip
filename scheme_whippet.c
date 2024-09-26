@@ -302,6 +302,18 @@ static inline void set_cdr(obj_t pair, obj_t value) {
   pair->pair.cdr = value;
 }
 
+/* vector access */
+
+static inline obj_t vref(obj_t vec, size_t i) {
+  return vec->vector.vector[i];
+}
+static inline void vset(obj_t vec, size_t i, obj_t value) {
+  gc_write_barrier(gc_ref_from_heap_object(vec), vector_osize(&vec->vector),
+                   gc_edge(&vec->vector.vector[i]),
+                   gc_ref_from_heap_object(value));
+  vec->vector.vector[i] = value;
+}
+
 /* getnbc -- get next non-blank char from stream */
 
 static int getnbc(FILE *stream)
@@ -708,7 +720,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
         size_t i;
         for(i = 0; i < obj->vector.length; ++i) {
           if(i > 0) putc(' ', stream);
-          print(obj->vector.vector[i], depth - 1, stream);
+          print(vref(obj, i), depth - 1, stream);
         }
       }
       putc(')', stream);
@@ -908,7 +920,7 @@ static obj_t list_to_vector(obj_t list)
   i = 0;
   l = list;
   while(TYPE(l) == TYPE_PAIR) {
-    vector->vector.vector[i] = car(l);
+    vset(vector, i, car(l));
     ++i;
     l = cdr(l);
   }
@@ -1819,7 +1831,7 @@ static int equalp(obj_t obj1, obj_t obj2)
     if(obj1->vector.length != obj2->vector.length)
       return 0;
     for(i = 0; i < obj1->vector.length; ++i) {
-      if(!equalp(obj1->vector.vector[i], obj2->vector.vector[i]))
+      if(!equalp(vref(obj1, i), vref(obj2, i)))
         return 0;
     }
     return 1;
@@ -2661,7 +2673,7 @@ static obj_t entry_vector_ref(obj_t env, obj_t op_env, obj_t operator, obj_t ope
   unless(0 <= index->integer.integer && index->integer.integer < vector->vector.length)
     error("%s: index %ld out of bounds of vector length %ld",
           operator->operator.name, index->integer.integer, vector->vector.length);
-  return vector->vector.vector[index->integer.integer];
+  return vref(vector, index->integer.integer);
 }
 
 
@@ -2682,7 +2694,7 @@ static obj_t entry_vector_set(obj_t env, obj_t op_env, obj_t operator, obj_t ope
   unless(0 <= index->integer.integer && index->integer.integer < vector->vector.length)
     error("%s: index %ld out of bounds of vector length %ld",
           operator->operator.name, index->integer.integer, vector->vector.length);
-  vector->vector.vector[index->integer.integer] = obj;
+  vset(vector, index->integer.integer, obj);
   return obj_undefined;
 }
 
@@ -2703,7 +2715,7 @@ static obj_t entry_vector_to_list(obj_t env, obj_t op_env, obj_t operator, obj_t
   i = vector->vector.length;
   while(i > 0) {
     --i;
-    list = make_pair(vector->vector.vector[i], list);
+    list = make_pair(vref(vector, i), list);
   }
   return list;
 }
@@ -2738,7 +2750,7 @@ static obj_t entry_vector_fill(obj_t env, obj_t op_env, obj_t operator, obj_t op
   unless(TYPE(vector) == TYPE_VECTOR)
     error("%s: first argument must be a vector", operator->operator.name);
   for(i = 0; i < vector->vector.length; ++i)
-    vector->vector.vector[i] = obj;
+    vset(vector, i, obj);
   return obj_undefined;
 }
 
@@ -3270,7 +3282,7 @@ static obj_t entry_hashtable_keys(obj_t env, obj_t op_env, obj_t operator, obj_t
   for(i = 0; i < tbl->table.buckets->buckets.length; ++i) {
     struct bucket_s *b = &tbl->table.buckets->buckets.bucket[i];
     if(b->key != NULL && b->key != obj_deleted)
-      vector->vector.vector[j++] = b->value;
+      vset(vector, j++, b->value);
   }
   assert(j == vector->vector.length);
   return vector;

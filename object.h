@@ -153,3 +153,43 @@ typedef union obj_u {
   FOR_EACH_HEAP_OBJECT_KIND(UNION_FIELD)
 #undef UNION_FIELD
 } obj_s;
+
+
+/* Sizing objects
+ * These are used by the GC in gc-embed.h, but also by us.
+ */
+
+#define DEFINE_SIZEOF(name)                             \
+  static inline size_t name##_osize(name##_s *name) {   \
+    return sizeof(name##_s);                            \
+  }
+
+DEFINE_SIZEOF(pair);
+DEFINE_SIZEOF(promise);
+
+static inline size_t symbol_osize(symbol_s *s) {
+  return sizeof(symbol_s) + s->length+1;
+}
+
+DEFINE_SIZEOF(integer);
+DEFINE_SIZEOF(special);
+DEFINE_SIZEOF(operator);
+
+static inline size_t string_osize(string_s *s) {
+  return sizeof(string_s) + s->length+1;
+}
+
+DEFINE_SIZEOF(port);
+DEFINE_SIZEOF(character);
+
+static inline size_t vector_osize(vector_s *v) {
+  return sizeof(vector_s) + v->length * sizeof(obj_t);
+}
+
+DEFINE_SIZEOF(table);
+
+static inline size_t buckets_osize(buckets_s *b) {
+  return sizeof(buckets_s) + b->length * 2 * sizeof(obj_t);
+}
+
+#undef DEFINE_SIZEOF
