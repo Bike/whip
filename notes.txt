@@ -1,3 +1,7 @@
 Is there a race condition when we allocate an object? Like, what if a collection starts before we initialize it?
 If allocation fails the program dies, which sucks.
 Only supported platform is GNU/Linux currently.
+Walk all objects?
+Interior pointers?
+
+need to put in write barriers for hash tables
