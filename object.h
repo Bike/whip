@@ -131,17 +131,6 @@ typedef struct buckets_s {
 
 /* structure macros */
 
-#define CAR(obj)        ((obj)->pair.car)
-#define CDR(obj)        ((obj)->pair.cdr)
-#define CAAR(obj)       CAR(CAR(obj))
-#define CADR(obj)       CAR(CDR(obj))
-#define CDAR(obj)       CDR(CAR(obj))
-#define CDDR(obj)       CDR(CDR(obj))
-#define CADDR(obj)      CAR(CDDR(obj))
-#define CDDDR(obj)      CDR(CDDR(obj))
-#define CDDAR(obj)      CDR(CDAR(obj))
-#define CADAR(obj)      CAR(CDAR(obj))
-
 #define TYPE(obj) (header_live_alloc_kind((obj)->type.header.header))
 
 #define FOR_EACH_HEAP_OBJECT_KIND(OP)           \

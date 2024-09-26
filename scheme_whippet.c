@@ -162,8 +162,8 @@ static obj_t make_bool(int condition)
 static obj_t make_pair(obj_t car, obj_t cdr)
 {
   obj_t obj = gc_allocate_with_type(mutator, TYPE_PAIR, sizeof(pair_s));
-  CAR(obj) = car;
-  CDR(obj) = cdr;
+  obj->pair.car = car;
+  obj->pair.cdr = cdr;
   return obj;
 }
 
@@ -274,6 +274,29 @@ static obj_t make_table(size_t length, hash_t hashf, cmp_t cmpf)
   return obj;
 }
 
+/* list access */
+
+static inline obj_t car(obj_t pair) { return pair->pair.car; }
+static inline obj_t cdr(obj_t pair) { return pair->pair.cdr; }
+static inline obj_t caar(obj_t pair) { return car(car(pair)); }
+static inline obj_t cadr(obj_t pair) { return car(cdr(pair)); }
+static inline obj_t cdar(obj_t pair) { return cdr(car(pair)); }
+static inline obj_t cddr(obj_t pair) { return cdr(cdr(pair)); }
+static inline obj_t caaar(obj_t pair) { return car(car(car(pair))); }
+static inline obj_t caadr(obj_t pair) { return car(car(cdr(pair))); }
+static inline obj_t cadar(obj_t pair) { return car(cdr(car(pair))); }
+static inline obj_t caddr(obj_t pair) { return car(cdr(cdr(pair))); }
+static inline obj_t cdaar(obj_t pair) { return cdr(car(car(pair))); }
+static inline obj_t cdadr(obj_t pair) { return cdr(car(cdr(pair))); }
+static inline obj_t cddar(obj_t pair) { return cdr(cdr(car(pair))); }
+static inline obj_t cdddr(obj_t pair) { return cdr(cdr(cdr(pair))); }
+
+static inline void set_car(obj_t pair, obj_t value) {
+  pair->pair.car = value;
+}
+static inline void set_cdr(obj_t pair, obj_t value) {
+  pair->pair.cdr = value;
+}
 
 /* getnbc -- get next non-blank char from stream */
 
@@ -616,39 +639,39 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
     } break;
 
     case TYPE_PAIR: {
-      if(TYPE(CAR(obj)) == TYPE_SYMBOL &&
-         TYPE(CDR(obj)) == TYPE_PAIR &&
-         CDDR(obj) == obj_empty) {
-        if(CAR(obj) == obj_quote) {
+      if(TYPE(car(obj)) == TYPE_SYMBOL &&
+         TYPE(cdr(obj)) == TYPE_PAIR &&
+         cddr(obj) == obj_empty) {
+        if(car(obj) == obj_quote) {
           putc('\'', stream);
           if(depth == 0)
             fputs("...", stream);
           else
-            print(CADR(obj), depth - 1, stream);
+            print(cadr(obj), depth - 1, stream);
           break;
         }
-        if(CAR(obj) == obj_quasiquote) {
+        if(car(obj) == obj_quasiquote) {
           putc('`', stream);
           if(depth == 0)
             fputs("...", stream);
           else
-            print(CADR(obj), depth - 1, stream);
+            print(cadr(obj), depth - 1, stream);
           break;
         }
-        if(CAR(obj) == obj_unquote) {
+        if(car(obj) == obj_unquote) {
           putc(',', stream);
           if(depth == 0)
             fputs("...", stream);
           else
-            print(CADR(obj), depth - 1, stream);
+            print(cadr(obj), depth - 1, stream);
           break;
         }
-        if(CAR(obj) == obj_unquote_splic) {
+        if(car(obj) == obj_unquote_splic) {
           fputs(",@", stream);
           if(depth == 0)
             fputs("...", stream);
           else
-            print(CADR(obj), depth - 1, stream);
+            print(cadr(obj), depth - 1, stream);
           break;
         }
       }
@@ -657,8 +680,8 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
         fputs("...", stream);
       else {
         for(;;) {
-          print(CAR(obj), depth - 1, stream);
-          obj = CDR(obj);
+          print(car(obj), depth - 1, stream);
+          obj = cdr(obj);
           if(TYPE(obj) != TYPE_PAIR) break;
           putc(' ', stream);
         }
@@ -843,7 +866,7 @@ static obj_t read_list(FILE *stream, int c)
       list = new;
       end = new;
     } else {
-      CDR(end) = new;
+      set_cdr(end, new);
       end = new;
     }
   }
@@ -851,7 +874,7 @@ static obj_t read_list(FILE *stream, int c)
   if(c == '.') {
     if(list == obj_empty)
       error("read: unexpected dot");
-    CDR(end) = read_(stream);
+    set_cdr(end, read_(stream));
     c = getnbc(stream);
   }
 
@@ -870,7 +893,7 @@ static obj_t list_to_vector(obj_t list)
   l = list;
   while(TYPE(l) == TYPE_PAIR) {
     ++i;
-    l = CDR(l);
+    l = cdr(l);
   }
   if(l != obj_empty)
     return obj_error;
@@ -878,9 +901,9 @@ static obj_t list_to_vector(obj_t list)
   i = 0;
   l = list;
   while(TYPE(l) == TYPE_PAIR) {
-    vector->vector.vector[i] = CAR(l);
+    vector->vector.vector[i] = car(l);
     ++i;
-    l = CDR(l);
+    l = cdr(l);
   }
   return vector;
 }
@@ -957,11 +980,11 @@ static obj_t lookup_in_frame(obj_t frame, obj_t symbol)
 {
   while(frame != obj_empty) {
     assert(TYPE(frame) == TYPE_PAIR);
-    assert(TYPE(CAR(frame)) == TYPE_PAIR);
-    assert(TYPE(CAAR(frame)) == TYPE_SYMBOL);
-    if(CAAR(frame) == symbol)
-      return CAR(frame);
-    frame = CDR(frame);
+    assert(TYPE(car(frame)) == TYPE_PAIR);
+    assert(TYPE(caar(frame)) == TYPE_SYMBOL);
+    if(caar(frame) == symbol)
+      return car(frame);
+    frame = cdr(frame);
   }
   return obj_undefined;
 }
@@ -977,10 +1000,10 @@ static obj_t lookup(obj_t env, obj_t symbol)
   obj_t binding;
   while(env != obj_empty) {
     assert(TYPE(env) == TYPE_PAIR);
-    binding = lookup_in_frame(CAR(env), symbol);
+    binding = lookup_in_frame(car(env), symbol);
     if(binding != obj_undefined)
       return binding;
-    env = CDR(env);
+    env = cdr(env);
   }
   return obj_undefined;
 }
@@ -1000,11 +1023,11 @@ static void define(obj_t env, obj_t symbol, obj_t value)
 {
   obj_t binding;
   assert(TYPE(env) == TYPE_PAIR);       /* always at least one frame */
-  binding = lookup_in_frame(CAR(env), symbol);
+  binding = lookup_in_frame(car(env), symbol);
   if(binding != obj_undefined)
-    CDR(binding) = value;
+    set_cdr(binding, value);
   else
-    CAR(env) = make_pair(make_pair(symbol, value), CAR(env));
+    set_car(env, make_pair(make_pair(symbol, value), car(env)));
 }
 
 
@@ -1029,7 +1052,7 @@ static obj_t eval(obj_t env, obj_t op_env, obj_t exp)
       obj_t binding = lookup(env, exp);
       if(binding == obj_undefined)
         error("eval: unbound symbol \"%s\"", exp->symbol.string);
-      return CDR(binding);
+      return cdr(binding);
     }
 
     if(TYPE(exp) != TYPE_PAIR) {
@@ -1038,27 +1061,27 @@ static obj_t eval(obj_t env, obj_t op_env, obj_t exp)
     }
 
     /* apply operator or function */
-    if(TYPE(CAR(exp)) == TYPE_SYMBOL) {
-      obj_t binding = lookup(op_env, CAR(exp));
+    if(TYPE(car(exp)) == TYPE_SYMBOL) {
+      obj_t binding = lookup(op_env, car(exp));
       if(binding != obj_undefined) {
-        operator = CDR(binding);
+        operator = cdr(binding);
         assert(TYPE(operator) == TYPE_OPERATOR);
-        result = (*operator->operator.entry)(env, op_env, operator, CDR(exp));
+        result = (*operator->operator.entry)(env, op_env, operator, cdr(exp));
         goto found;
       }
     }
-    operator = eval(env, op_env, CAR(exp));
+    operator = eval(env, op_env, car(exp));
     unless(TYPE(operator) == TYPE_OPERATOR)
       error("eval: application of non-function");
-    result = (*operator->operator.entry)(env, op_env, operator, CDR(exp));
+    result = (*operator->operator.entry)(env, op_env, operator, cdr(exp));
 
   found:
-    if (!(TYPE(result) == TYPE_PAIR && CAR(result) == obj_tail))
+    if (!(TYPE(result) == TYPE_PAIR && car(result) == obj_tail))
       return result;
 
-    env = CADR(result);
-    op_env = CADDR(result);
-    exp = CAR(CDDDR(result));
+    env = cadr(result);
+    op_env = caddr(result);
+    exp = car(cdddr(result));
   }
 }
 
@@ -1097,13 +1120,13 @@ static obj_t eval_list(obj_t env, obj_t op_env, obj_t list, char *message)
   while(list != obj_empty) {
     if(TYPE(list) != TYPE_PAIR)
       error(message);
-    pair = make_pair(eval(env, op_env, CAR(list)), obj_empty);
+    pair = make_pair(eval(env, op_env, car(list)), obj_empty);
     if(result == obj_empty)
       result = pair;
     else
-      CDR(end) = pair;
+      set_cdr(end, pair);
     end = pair;
-    list = CDR(list);
+    list = cdr(list);
   }
   return result;
 }
@@ -1121,8 +1144,8 @@ static obj_t eval_args1(char *name, obj_t env, obj_t op_env,
   for(i = 0; i < n; ++i) {
     unless(TYPE(operands) == TYPE_PAIR)
       error("eval: too few arguments to %s", name);
-    *va_arg(args, obj_t *) = eval(env, op_env, CAR(operands));
-    operands = CDR(operands);
+    *va_arg(args, obj_t *) = eval(env, op_env, car(operands));
+    operands = cdr(operands);
   }
   return operands;
 }
@@ -1202,10 +1225,10 @@ static obj_t eval_body(obj_t env, obj_t op_env, obj_t operator, obj_t body)
   for (;;) {
     if (TYPE(body) != TYPE_PAIR)
       error("%s: illegal expression list", operator->operator.name);
-    if (CDR(body) == obj_empty)
-      return eval_tail(env, op_env, CAR(body));
-    (void)eval(env, op_env, CAR(body));
-    body = CDR(body);
+    if (cdr(body) == obj_empty)
+      return eval_tail(env, op_env, car(body));
+    (void)eval(env, op_env, car(body));
+    body = cdr(body);
   }
 }
 
@@ -1245,12 +1268,12 @@ static obj_t entry_interpret(obj_t env, obj_t op_env, obj_t operator, obj_t oper
       arguments = obj_empty;
     } else {
       assert(TYPE(arguments) == TYPE_PAIR &&
-             TYPE(CAR(arguments)) == TYPE_SYMBOL);
+             TYPE(car(arguments)) == TYPE_SYMBOL);
       define(fun_env,
-             CAR(arguments),
-             eval(env, op_env, CAR(operands)));
-      operands = CDR(operands);
-      arguments = CDR(arguments);
+             car(arguments),
+             eval(env, op_env, car(operands)));
+      operands = cdr(operands);
+      arguments = cdr(arguments);
     }
   }
   if(arguments != obj_empty)
@@ -1269,9 +1292,9 @@ static obj_t entry_interpret(obj_t env, obj_t op_env, obj_t operator, obj_t oper
 static obj_t entry_quote(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   unless(TYPE(operands) == TYPE_PAIR &&
-         CDR(operands) == obj_empty)
+         cdr(operands) == obj_empty)
     error("%s: illegal syntax", operator->operator.name);
-  return CAR(operands);
+  return car(operands);
 }
 
 
@@ -1288,19 +1311,19 @@ static obj_t entry_define(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 {
   obj_t symbol = NULL, value = NULL;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR)
+         TYPE(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
-  if(TYPE(CAR(operands)) == TYPE_SYMBOL) {
-    unless(CDDR(operands) == obj_empty)
+  if(TYPE(car(operands)) == TYPE_SYMBOL) {
+    unless(cddr(operands) == obj_empty)
       error("%s: too many arguments", operator->operator.name);
-    symbol = CAR(operands);
-    value = eval(env, op_env, CADR(operands));
-  } else if(TYPE(CAR(operands)) == TYPE_PAIR &&
-            TYPE(CAAR(operands)) == TYPE_SYMBOL) {
-    symbol = CAAR(operands);
+    symbol = car(operands);
+    value = eval(env, op_env, cadr(operands));
+  } else if(TYPE(car(operands)) == TYPE_PAIR &&
+            TYPE(caar(operands)) == TYPE_SYMBOL) {
+    symbol = caar(operands);
     value = eval(env, op_env,
                  make_pair(obj_lambda,
-                           make_pair(CDAR(operands), CDR(operands))));
+                           make_pair(cdar(operands), cdr(operands))));
   } else
     error("%s: applied to binder", operator->operator.name);
   define(env, symbol, value);
@@ -1318,17 +1341,17 @@ static obj_t entry_if(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t test;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR &&
-         (CDDR(operands) == obj_empty ||
-          (TYPE(CDDR(operands)) == TYPE_PAIR &&
-           CDDDR(operands) == obj_empty)))
+         TYPE(cdr(operands)) == TYPE_PAIR &&
+         (cddr(operands) == obj_empty ||
+          (TYPE(cddr(operands)) == TYPE_PAIR &&
+           cdddr(operands) == obj_empty)))
     error("%s: illegal syntax", operator->operator.name);
-  test = eval(env, op_env, CAR(operands));
+  test = eval(env, op_env, car(operands));
   /* Anything which is not #f counts as true [R4RS 6.1]. */
   if(test != obj_false)
-    return eval_tail(env, op_env, CADR(operands));
-  if(TYPE(CDDR(operands)) == TYPE_PAIR)
-    return eval_tail(env, op_env, CADDR(operands));
+    return eval_tail(env, op_env, cadr(operands));
+  if(TYPE(cddr(operands)) == TYPE_PAIR)
+    return eval_tail(env, op_env, caddr(operands));
   return obj_undefined;
 }
 
@@ -1343,23 +1366,23 @@ static obj_t entry_cond(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   unless(TYPE(operands) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
   while(TYPE(operands) == TYPE_PAIR) {
-    obj_t clause = CAR(operands);
+    obj_t clause = car(operands);
     obj_t result;
     unless(TYPE(clause) == TYPE_PAIR &&
-           TYPE(CDR(clause)) == TYPE_PAIR)
+           TYPE(cdr(clause)) == TYPE_PAIR)
       error("%s: illegal clause syntax", operator->operator.name);
-    if(CAR(clause) == obj_else) {
-      unless(CDR(operands) == obj_empty)
+    if(car(clause) == obj_else) {
+      unless(cdr(operands) == obj_empty)
         error("%s: else clause must come last", operator->operator.name);
       result = obj_true;
     } else
-      result = eval(env, op_env, CAR(clause));
+      result = eval(env, op_env, car(clause));
     if(result != obj_false) {
-      if (CDR(clause) == obj_empty)
+      if (cdr(clause) == obj_empty)
         return result;
-      return eval_body(env, op_env, operator, CDR(clause));
+      return eval_body(env, op_env, operator, cdr(clause));
     }
-    operands = CDR(operands);
+    operands = cdr(operands);
   }
   return obj_undefined;
 }
@@ -1375,10 +1398,10 @@ static obj_t entry_and(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   do {
     if (TYPE(operands) != TYPE_PAIR)
       error("%s: illegal syntax", operator->operator.name);
-    if (CDR(operands) == obj_empty)
-      return eval_tail(env, op_env, CAR(operands));
-    test = eval(env, op_env, CAR(operands));
-    operands = CDR(operands);
+    if (cdr(operands) == obj_empty)
+      return eval_tail(env, op_env, car(operands));
+    test = eval(env, op_env, car(operands));
+    operands = cdr(operands);
   } while (test != obj_false);
   return test;
 }
@@ -1394,10 +1417,10 @@ static obj_t entry_or(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   do {
     if (TYPE(operands) != TYPE_PAIR)
       error("%s: illegal syntax", operator->operator.name);
-    if (CDR(operands) == obj_empty)
-      return eval_tail(env, op_env, CAR(operands));
-    test = eval(env, op_env, CAR(operands));
-    operands = CDR(operands);
+    if (cdr(operands) == obj_empty)
+      return eval_tail(env, op_env, car(operands));
+    test = eval(env, op_env, car(operands));
+    operands = cdr(operands);
   } while (test == obj_false);
   return test;
 }
@@ -1410,23 +1433,23 @@ static obj_t entry_let(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t inner_env, bindings;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR)
+         TYPE(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
   inner_env = make_pair(obj_empty, env);        /* TODO: common with interpret */
-  bindings = CAR(operands);
+  bindings = car(operands);
   while(TYPE(bindings) == TYPE_PAIR) {
-    obj_t binding = CAR(bindings);
+    obj_t binding = car(bindings);
     unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(CAR(binding)) == TYPE_SYMBOL &&
-           TYPE(CDR(binding)) == TYPE_PAIR &&
-           CDDR(binding) == obj_empty)
+           TYPE(car(binding)) == TYPE_SYMBOL &&
+           TYPE(cdr(binding)) == TYPE_PAIR &&
+           cddr(binding) == obj_empty)
       error("%s: illegal binding", operator->operator.name);
-    define(inner_env, CAR(binding), eval(env, op_env, CADR(binding)));
-    bindings = CDR(bindings);
+    define(inner_env, car(binding), eval(env, op_env, cadr(binding)));
+    bindings = cdr(bindings);
   }
   if(bindings != obj_empty)
     error("%s: illegal bindings list", operator->operator.name);
-  return eval_body(inner_env, op_env, operator, CDR(operands));
+  return eval_body(inner_env, op_env, operator, cdr(operands));
 }
 
 
@@ -1437,23 +1460,23 @@ static obj_t entry_let_star(obj_t env, obj_t op_env, obj_t operator, obj_t opera
 {
   obj_t inner_env, bindings;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR)
+         TYPE(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
   inner_env = make_pair(obj_empty, env);        /* TODO: common with interpret */
-  bindings = CAR(operands);
+  bindings = car(operands);
   while(TYPE(bindings) == TYPE_PAIR) {
-    obj_t binding = CAR(bindings);
+    obj_t binding = car(bindings);
     unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(CAR(binding)) == TYPE_SYMBOL &&
-           TYPE(CDR(binding)) == TYPE_PAIR &&
-           CDDR(binding) == obj_empty)
+           TYPE(car(binding)) == TYPE_SYMBOL &&
+           TYPE(cdr(binding)) == TYPE_PAIR &&
+           cddr(binding) == obj_empty)
       error("%s: illegal binding", operator->operator.name);
-    define(inner_env, CAR(binding), eval(inner_env, op_env, CADR(binding)));
-    bindings = CDR(bindings);
+    define(inner_env, car(binding), eval(inner_env, op_env, cadr(binding)));
+    bindings = cdr(bindings);
   }
   if(bindings != obj_empty)
     error("%s: illegal bindings list", operator->operator.name);
-  return eval_body(inner_env, op_env, operator, CDR(operands));
+  return eval_body(inner_env, op_env, operator, cdr(operands));
 }
 
 
@@ -1464,29 +1487,29 @@ static obj_t entry_letrec(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 {
   obj_t inner_env, bindings;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR)
+         TYPE(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
   inner_env = make_pair(obj_empty, env);        /* TODO: common with interpret */
-  bindings = CAR(operands);
+  bindings = car(operands);
   while(TYPE(bindings) == TYPE_PAIR) {
-    obj_t binding = CAR(bindings);
+    obj_t binding = car(bindings);
     unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(CAR(binding)) == TYPE_SYMBOL &&
-           TYPE(CDR(binding)) == TYPE_PAIR &&
-           CDDR(binding) == obj_empty)
+           TYPE(car(binding)) == TYPE_SYMBOL &&
+           TYPE(cdr(binding)) == TYPE_PAIR &&
+           cddr(binding) == obj_empty)
       error("%s: illegal binding", operator->operator.name);
-    define(inner_env, CAR(binding), obj_undefined);
-    bindings = CDR(bindings);
+    define(inner_env, car(binding), obj_undefined);
+    bindings = cdr(bindings);
   }
   if(bindings != obj_empty)
     error("%s: illegal bindings list", operator->operator.name);
-  bindings = CAR(operands);
+  bindings = car(operands);
   while(TYPE(bindings) == TYPE_PAIR) {
-    obj_t binding = CAR(bindings);
-    define(inner_env, CAR(binding), eval(inner_env, op_env, CADR(binding)));
-    bindings = CDR(bindings);
+    obj_t binding = car(bindings);
+    define(inner_env, car(binding), eval(inner_env, op_env, cadr(binding)));
+    bindings = cdr(bindings);
   }
-  return eval_body(inner_env, op_env, operator, CDR(operands));
+  return eval_body(inner_env, op_env, operator, cdr(operands));
 }
 
 
@@ -1501,8 +1524,8 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t inner_env, next_env, bindings;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR &&
-         TYPE(CADR(operands)) == TYPE_PAIR)
+         TYPE(cdr(operands)) == TYPE_PAIR &&
+         TYPE(cadr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
   inner_env = make_pair(obj_empty, env);
 
@@ -1511,30 +1534,30 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
      bound to fresh locations, the results of the <init> expressions
      are stored in the bindings of the <variable>s, and then the
      iteration phase begins. */
-  bindings = CAR(operands);
+  bindings = car(operands);
   while(TYPE(bindings) == TYPE_PAIR) {
-    obj_t binding = CAR(bindings);
+    obj_t binding = car(bindings);
     unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(CAR(binding)) == TYPE_SYMBOL &&
-           TYPE(CDR(binding)) == TYPE_PAIR &&
-           (CDDR(binding) == obj_empty ||
-            (TYPE(CDDR(binding)) == TYPE_PAIR &&
-             CDDDR(binding) == obj_empty)))
+           TYPE(car(binding)) == TYPE_SYMBOL &&
+           TYPE(cdr(binding)) == TYPE_PAIR &&
+           (cddr(binding) == obj_empty ||
+            (TYPE(cddr(binding)) == TYPE_PAIR &&
+             cdddr(binding) == obj_empty)))
       error("%s: illegal binding", operator->operator.name);
-    define(inner_env, CAR(binding), eval(env, op_env, CADR(binding)));
-    bindings = CDR(bindings);
+    define(inner_env, car(binding), eval(env, op_env, cadr(binding)));
+    bindings = cdr(bindings);
   }
   for(;;) {
     /* Each iteration begins by evaluating <test>; */
-    obj_t test = CADR(operands);
-    if(eval(inner_env, op_env, CAR(test)) == obj_false) {
+    obj_t test = cadr(operands);
+    if(eval(inner_env, op_env, car(test)) == obj_false) {
       /* if the result is false (see section see section 6.1
          Booleans), then the <command> expressions are evaluated in
          order for effect, */
-      obj_t commands = CDDR(operands);
+      obj_t commands = cddr(operands);
       while(TYPE(commands) == TYPE_PAIR) {
-        eval(inner_env, op_env, CAR(commands));
-        commands = CDR(commands);
+        eval(inner_env, op_env, car(commands));
+        commands = cdr(commands);
       }
       unless(commands == obj_empty)
         error("%s: illegal syntax", operator->operator.name);
@@ -1543,13 +1566,13 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
          order, the <variable>s are bound to fresh locations, the
          results of the <step>s are stored in the bindings of the
          <variable>s, and the next iteration begins. */
-      bindings = CAR(operands);
+      bindings = car(operands);
       next_env = make_pair(obj_empty, inner_env);
       while(TYPE(bindings) == TYPE_PAIR) {
-        obj_t binding = CAR(bindings);
-        unless(CDDR(binding) == obj_empty)
-          define(next_env, CAR(binding), eval(inner_env, op_env, CADDR(binding)));
-        bindings = CDR(bindings);
+        obj_t binding = car(bindings);
+        unless(cddr(binding) == obj_empty)
+          define(next_env, car(binding), eval(inner_env, op_env, caddr(binding)));
+        bindings = cdr(bindings);
       }
       inner_env = next_env;
     } else {
@@ -1559,10 +1582,10 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
          If no <expression>s are present, then the value of the do
          expression is unspecified. */
       obj_t result = obj_undefined;
-      test = CDR(test);
+      test = cdr(test);
       while(TYPE(test) == TYPE_PAIR) {
-        result = eval(inner_env, op_env, CAR(test));
-        test = CDR(test);
+        result = eval(inner_env, op_env, car(test));
+        test = cdr(test);
       }
       unless(test == obj_empty)
         error("%s: illegal syntax", operator->operator.name);
@@ -1577,11 +1600,11 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static obj_t entry_delay(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   unless(TYPE(operands) == TYPE_PAIR &&
-         CDR(operands) == obj_empty)
+         cdr(operands) == obj_empty)
     error("%s: illegal syntax", operator->operator.name);
   return make_promise(make_operator("anonymous promise",
                                     entry_interpret, obj_empty,
-                                    CAR(operands), env, op_env));
+                                    car(operands), env, op_env));
 }
 
 
@@ -1591,45 +1614,45 @@ static obj_t quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t arg)
   unless(TYPE(arg) == TYPE_PAIR)
     return arg;
   while(TYPE(arg) == TYPE_PAIR) {
-    if(TYPE(CAR(arg)) == TYPE_PAIR &&
-       TYPE(CAAR(arg)) == TYPE_SYMBOL &&
-       (CAAR(arg) == obj_unquote ||
-        CAAR(arg) == obj_unquote_splic)) {
-      unless(TYPE(CDAR(arg)) == TYPE_PAIR &&
-             CDDAR(arg) == obj_empty)
+    if(TYPE(car(arg)) == TYPE_PAIR &&
+       TYPE(caar(arg)) == TYPE_SYMBOL &&
+       (caar(arg) == obj_unquote ||
+        caar(arg) == obj_unquote_splic)) {
+      unless(TYPE(cdar(arg)) == TYPE_PAIR &&
+             cddar(arg) == obj_empty)
         error("%s: illegal %s syntax", operator->operator.name,
-              CAAR(arg)->symbol.string);
-      insert = eval(env, op_env, CADAR(arg));
-      if(CAAR(arg) == obj_unquote) {
+              caar(arg)->symbol.string);
+      insert = eval(env, op_env, cadar(arg));
+      if(caar(arg) == obj_unquote) {
         obj_t pair = make_pair(insert, obj_empty);
         if(result == obj_empty)
           result = pair;
         if(end)
-          CDR(end) = pair;
+          set_cdr(end, pair);
         end = pair;
-      } else if(CAAR(arg) == obj_unquote_splic) {
+      } else if(caar(arg) == obj_unquote_splic) {
         while(TYPE(insert) == TYPE_PAIR) {
-          obj_t pair = make_pair(CAR(insert), obj_empty);
+          obj_t pair = make_pair(car(insert), obj_empty);
           if(result == obj_empty)
             result = pair;
           if(end)
-            CDR(end) = pair;
+            set_cdr(end, pair);
           end = pair;
-          insert = CDR(insert);
+          insert = cdr(insert);
         }
         if(insert != obj_empty)
           error("%s: %s expression must return list",
-                operator->operator.name, CAAR(arg)->symbol.string);
+                operator->operator.name, caar(arg)->symbol.string);
       }
     } else {
-      obj_t pair = make_pair(quasiquote(env, op_env, operator, CAR(arg)), obj_empty);
+      obj_t pair = make_pair(quasiquote(env, op_env, operator, car(arg)), obj_empty);
       if(result == obj_empty)
         result = pair;
       if(end)
-        CDR(end) = pair;
+        set_cdr(end, pair);
       end = pair;
     }
-    arg = CDR(arg);
+    arg = cdr(arg);
   }
   return result;
 }
@@ -1640,9 +1663,9 @@ static obj_t quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t arg)
 static obj_t entry_quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   unless(TYPE(operands) == TYPE_PAIR &&
-         CDR(operands) == obj_empty)
+         cdr(operands) == obj_empty)
     error("%s: illegal syntax", operator->operator.name);
-  return quasiquote(env, op_env, operator, CAR(operands));
+  return quasiquote(env, op_env, operator, car(operands));
 }
 
 
@@ -1656,18 +1679,18 @@ static obj_t entry_set(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t symbol, binding, value;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR &&
-         CDDR(operands) == obj_empty)
+         TYPE(cdr(operands)) == TYPE_PAIR &&
+         cddr(operands) == obj_empty)
     error("%s: illegal syntax", operator->operator.name);
-  unless(TYPE(CAR(operands)) == TYPE_SYMBOL)
+  unless(TYPE(car(operands)) == TYPE_SYMBOL)
     error("%s: applied to non-symbol", operator->operator.name);
-  symbol = CAR(operands);
+  symbol = car(operands);
   binding = lookup(env, symbol);
   if(binding == obj_undefined)
     error("%s: applied to unbound symbol \"%s\"",
           operator->operator.name, symbol->symbol.string);
-  value = eval(env, op_env, CADR(operands));
-  CDR(binding) = value;
+  value = eval(env, op_env, cadr(operands));
+  set_cdr(binding, value);
   return value;
 }
 
@@ -1695,19 +1718,19 @@ static obj_t entry_lambda(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 {
   obj_t list;
   unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(CDR(operands)) == TYPE_PAIR)
+         TYPE(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", operator->operator.name);
   /* check syntax of argument list to save time in apply */
-  list = CAR(operands);
+  list = car(operands);
   while(list != obj_empty && TYPE(list) != TYPE_SYMBOL) {
     unless(TYPE(list) == TYPE_PAIR &&
-           TYPE(CAR(list)) == TYPE_SYMBOL)
+           TYPE(car(list)) == TYPE_SYMBOL)
       error("%s: illegal argument list", operator->operator.name);
-    list = CDR(list);
+    list = cdr(list);
   }
   return make_operator("anonymous function",
-                       entry_interpret, CAR(operands),
-                       make_pair(obj_begin, CDR(operands)),
+                       entry_interpret, car(operands),
+                       make_pair(obj_begin, cdr(operands)),
                        env, op_env);
 }
 
@@ -1784,7 +1807,7 @@ static int equalp(obj_t obj1, obj_t obj2)
     return 0;
   switch(TYPE(obj1)) {
   case TYPE_PAIR:
-    return equalp(CAR(obj1), CAR(obj2)) && equalp(CDR(obj1), CDR(obj2));
+    return equalp(car(obj1), car(obj2)) && equalp(cdr(obj1), cdr(obj2));
   case TYPE_VECTOR:
     if(obj1->vector.length != obj2->vector.length)
       return 0;
@@ -1854,7 +1877,7 @@ static obj_t entry_car(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   eval_args(operator->operator.name, env, op_env, operands, 1, &pair);
   unless(TYPE(pair) == TYPE_PAIR)
     error("%s: argument must be a pair", operator->operator.name);
-  return CAR(pair);
+  return car(pair);
 }
 
 /* (cdr pair)
@@ -1868,7 +1891,7 @@ static obj_t entry_cdr(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   eval_args(operator->operator.name, env, op_env, operands, 1, &pair);
   unless(TYPE(pair) == TYPE_PAIR)
     error("%s: argument must be a pair", operator->operator.name);
-  return CDR(pair);
+  return cdr(pair);
 }
 
 
@@ -1883,7 +1906,7 @@ static obj_t entry_setcar(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   eval_args(operator->operator.name, env, op_env, operands, 2, &pair, &value);
   unless(TYPE(pair) == TYPE_PAIR)
     error("%s: first argument must be a pair", operator->operator.name);
-  CAR(pair) = value;
+  set_car(pair, value);
   return obj_undefined;
 }
 
@@ -1899,7 +1922,7 @@ static obj_t entry_setcdr(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   eval_args(operator->operator.name, env, op_env, operands, 2, &pair, &value);
   unless(TYPE(pair) == TYPE_PAIR)
     error("%s: first argument must be a pair", operator->operator.name);
-  CDR(pair) = value;
+  set_cdr(pair, value);
   return obj_undefined;
 }
 
@@ -1926,7 +1949,7 @@ static obj_t entry_listp(obj_t env, obj_t op_env, obj_t operator, obj_t operands
   obj_t arg;
   eval_args(operator->operator.name, env, op_env, operands, 1, &arg);
   while(TYPE(arg) == TYPE_PAIR)
-    arg = CDR(arg);
+    arg = cdr(arg);
   return make_bool(arg == obj_empty);
 }
 
@@ -1955,7 +1978,7 @@ static obj_t entry_length(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   length = 0;
   while(TYPE(arg) == TYPE_PAIR) {
     ++length;
-    arg = CDR(arg);
+    arg = cdr(arg);
   }
   if(arg != obj_empty)
     error("%s: applied to non-list", operator->operator.name);
@@ -1975,19 +1998,19 @@ static obj_t entry_append(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   result = obj_empty;
   end = NULL;                   /* suppress "uninitialized" warning in GCC */
   while(TYPE(arg1) == TYPE_PAIR) {
-    pair = make_pair(CAR(arg1), obj_empty);
+    pair = make_pair(car(arg1), obj_empty);
     if(result == obj_empty)
       result = pair;
     else
-      CDR(end) = pair;
+      set_cdr(end, pair);
     end = pair;
-    arg1 = CDR(arg1);
+    arg1 = cdr(arg1);
   }
   if(arg1 != obj_empty)
     error("%s: applied to non-list", operator->operator.name);
   if(result == obj_empty)
     return arg2;
-  CDR(end) = arg2;
+  set_cdr(end, arg2);
   return result;
 }
 
@@ -2082,13 +2105,13 @@ static obj_t entry_apply(obj_t env, obj_t op_env, obj_t operator, obj_t operands
   while(args != obj_empty) {
     obj_t a;
     assert(TYPE(args) == TYPE_PAIR);
-    a = make_pair(make_pair(quote, make_pair(CAR(args), obj_empty)), obj_empty);
+    a = make_pair(make_pair(quote, make_pair(car(args), obj_empty)), obj_empty);
     if(end != NULL)
-      CDR(end) = a;
+      set_cdr(end, a);
     else
       qargs = a;
     end = a;
-    args = CDR(args);
+    args = cdr(args);
   }
   return (*proc->operator.entry)(env, op_env, proc, qargs);
 }
@@ -2105,10 +2128,10 @@ static obj_t entry_add(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   eval_args_rest(operator->operator.name, env, op_env, operands, &args, 0);
   result = 0;
   while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(CAR(args)) == TYPE_INTEGER)
+    unless(TYPE(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", operator->operator.name);
-    result += CAR(args)->integer.integer;
-    args = CDR(args);
+    result += car(args)->integer.integer;
+    args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
   return make_integer(result);
@@ -2126,10 +2149,10 @@ static obj_t entry_multiply(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   eval_args_rest(operator->operator.name, env, op_env, operands, &args, 0);
   result = 1;
   while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(CAR(args)) == TYPE_INTEGER)
+    unless(TYPE(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", operator->operator.name);
-    result *= CAR(args)->integer.integer;
-    args = CDR(args);
+    result *= car(args)->integer.integer;
+    args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
   return make_integer(result);
@@ -2156,10 +2179,10 @@ static obj_t entry_subtract(obj_t env, obj_t op_env, obj_t operator, obj_t opera
     result = -result;
   else {
     while(TYPE(args) == TYPE_PAIR) {
-      unless(TYPE(CAR(args)) == TYPE_INTEGER)
+      unless(TYPE(car(args)) == TYPE_INTEGER)
         error("%s: arguments must be integers", operator->operator.name);
-      result -= CAR(args)->integer.integer;
-      args = CDR(args);
+      result -= car(args)->integer.integer;
+      args = cdr(args);
     }
     assert(args == obj_empty); /* eval_args_rest always returns a list */
   }
@@ -2189,12 +2212,12 @@ static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operand
     result = 1/result;  /* TODO: pretty meaningless for integers */
   } else {
     while(TYPE(args) == TYPE_PAIR) {
-      unless(TYPE(CAR(args)) == TYPE_INTEGER)
+      unless(TYPE(car(args)) == TYPE_INTEGER)
         error("%s: arguments must be integers", operator->operator.name);
-      if(CAR(args)->integer.integer == 0)
+      if(car(args)->integer.integer == 0)
         error("%s: divide by zero", operator->operator.name);
-      result /= CAR(args)->integer.integer;
-      args = CDR(args);
+      result /= car(args)->integer.integer;
+      args = cdr(args);
     }
     assert(args == obj_empty); /* eval_args_rest always returns a list */
   }
@@ -2216,12 +2239,12 @@ static obj_t entry_lessthan(obj_t env, obj_t op_env, obj_t operator, obj_t opera
     error("%s: first argument must be an integer", operator->operator.name);
   last = arg->integer.integer;
   while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(CAR(args)) == TYPE_INTEGER)
+    unless(TYPE(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", operator->operator.name);
-    if (last >= CAR(args)->integer.integer)
+    if (last >= car(args)->integer.integer)
       return obj_false;
-    last = CAR(args)->integer.integer;
-    args = CDR(args);
+    last = car(args)->integer.integer;
+    args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
   return obj_true;
@@ -2242,12 +2265,12 @@ static obj_t entry_greaterthan(obj_t env, obj_t op_env, obj_t operator, obj_t op
     error("%s: first argument must be an integer", operator->operator.name);
   last = arg->integer.integer;
   while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(CAR(args)) == TYPE_INTEGER)
+    unless(TYPE(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", operator->operator.name);
-    if (last <= CAR(args)->integer.integer)
+    if (last <= car(args)->integer.integer)
       return obj_false;
-    last = CAR(args)->integer.integer;
-    args = CDR(args);
+    last = car(args)->integer.integer;
+    args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
   return obj_true;
@@ -2267,8 +2290,8 @@ static obj_t entry_reverse(obj_t env, obj_t op_env, obj_t operator, obj_t operan
   while(arg != obj_empty) {
     unless(TYPE(arg) == TYPE_PAIR)
       error("%s: argument must be a list", operator->operator.name);
-    result = make_pair(CAR(arg), result);
-    arg = CDR(arg);
+    result = make_pair(car(arg), result);
+    arg = cdr(arg);
   }
   return result;
 }
@@ -2291,7 +2314,7 @@ static obj_t entry_list_tail(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   while(i-- > 0) {
     unless(TYPE(arg) == TYPE_PAIR)
       error("%s: first argument must be a list", operator->operator.name);
-    arg = CDR(arg);
+    arg = cdr(arg);
   }
   return arg;
 }
@@ -2316,8 +2339,8 @@ static obj_t entry_list_ref(obj_t env, obj_t op_env, obj_t operator, obj_t opera
       error("%s: index %ld out of bounds", operator->operator.name, k->integer.integer);
     unless(TYPE(arg) == TYPE_PAIR)
       error("%s: first argument must be a list", operator->operator.name);
-    result = CAR(arg);
-    arg = CDR(arg);
+    result = car(arg);
+    arg = cdr(arg);
   } while(i-- > 0);
   return result;
 }
@@ -2396,11 +2419,11 @@ static obj_t entry_close_port(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 static FILE *rest_port_stream(obj_t operator, obj_t rest, const char *argnumber, FILE *default_stream) {
   FILE *stream = default_stream;
   unless(rest == obj_empty) {
-    unless(CDR(rest) == obj_empty)
+    unless(cdr(rest) == obj_empty)
       error("%s: too many arguments", operator->operator.name);
-    unless(TYPE(CAR(rest)) == TYPE_PORT)
+    unless(TYPE(car(rest)) == TYPE_PORT)
       error("%s: %s argument must be a port", operator->operator.name, argnumber);
-    stream = CAR(rest)->port.stream;
+    stream = car(rest)->port.stream;
     unless(stream)
       error("%s: port is closed", operator->operator.name);
   }
@@ -2574,9 +2597,9 @@ static obj_t entry_make_vector(obj_t env, obj_t op_env, obj_t operator, obj_t op
   unless(TYPE(length) == TYPE_INTEGER)
     error("%s: first argument must be an integer", operator->operator.name);
   unless(rest == obj_empty) {
-    unless(CDR(rest) == obj_empty)
+    unless(cdr(rest) == obj_empty)
       error("%s: too many arguments", operator->operator.name);
-    fill = CAR(rest);
+    fill = car(rest);
   }
   return make_vector(length->integer.integer, fill);
 }
@@ -2787,11 +2810,11 @@ static obj_t entry_make_string(obj_t env, obj_t op_env, obj_t operator, obj_t op
   unless(k->integer.integer >= 0)
     error("%s: first argument must be non-negative", operator->operator.name);
   if (TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(CAR(args)) == TYPE_CHARACTER)
+    unless(TYPE(car(args)) == TYPE_CHARACTER)
       error("%s: second argument must be a character", operator->operator.name);
-    unless(CDR(args) == obj_empty)
+    unless(cdr(args) == obj_empty)
       error("%s: too many arguments", operator->operator.name);
-    c = CAR(args)->character.c;
+    c = car(args)->character.c;
   }
   obj = make_string(k->integer.integer, NULL);
   for (i = 0; i < k->integer.integer; ++i) {
@@ -2813,19 +2836,19 @@ static obj_t entry_string(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   o = args;
   length = 0;
   while(TYPE(o) == TYPE_PAIR) {
-    unless(TYPE(CAR(o)) == TYPE_CHARACTER)
+    unless(TYPE(car(o)) == TYPE_CHARACTER)
       error("%s: arguments must be strings", operator->operator.name);
     ++ length;
-    o = CDR(o);
+    o = cdr(o);
   }
   obj = make_string(length, NULL);
   o = args;
   length = 0;
   while(TYPE(o) == TYPE_PAIR) {
-    assert(TYPE(CAR(o)) == TYPE_CHARACTER);
-    obj->string.string[length] = CAR(o)->character.c;
+    assert(TYPE(car(o)) == TYPE_CHARACTER);
+    obj->string.string[length] = car(o)->character.c;
     ++ length;
-    o = CDR(o);
+    o = cdr(o);
   }
   assert(length == obj->string.length);
   return obj;
@@ -2924,20 +2947,20 @@ static obj_t entry_string_append(obj_t env, obj_t op_env, obj_t operator, obj_t 
   o = args;
   length = 0;
   while(TYPE(o) == TYPE_PAIR) {
-    unless(TYPE(CAR(o)) == TYPE_STRING)
+    unless(TYPE(car(o)) == TYPE_STRING)
       error("%s: arguments must be strings", operator->operator.name);
-    length += CAR(o)->string.length;
-    o = CDR(o);
+    length += car(o)->string.length;
+    o = cdr(o);
   }
   obj = make_string(length, NULL);
   o = args;
   length = 0;
   while(TYPE(o) == TYPE_PAIR) {
-    string_s *s = &CAR(o)->string;
-    assert(TYPE(CAR(o)) == TYPE_STRING);
+    string_s *s = &car(o)->string;
+    assert(TYPE(car(o)) == TYPE_STRING);
     memcpy(obj->string.string + length, s->string, s->length + 1);
     length += s->length;
-    o = CDR(o);
+    o = cdr(o);
   }
   assert(length == obj->string.length);
   return obj;
@@ -2981,18 +3004,18 @@ static obj_t entry_list_to_string(obj_t env, obj_t op_env, obj_t operator, obj_t
   while(l != obj_empty) {
     unless(TYPE(l) == TYPE_PAIR)
       error("%s: argument must be a list", operator->operator.name);
-    unless(TYPE(CAR(l)) == TYPE_CHARACTER)
+    unless(TYPE(car(l)) == TYPE_CHARACTER)
       error("%s: argument must be a list of characters", operator->operator.name);
     ++ length;
-    l = CDR(l);
+    l = cdr(l);
   }
   string = make_string(length, NULL);
   l = list;
   for(i = 0; i < length; ++i) {
     assert(TYPE(l) == TYPE_PAIR);
-    assert(TYPE(CAR(l)) == TYPE_CHARACTER);
-    string->string.string[i] = CAR(l)->character.c;
-    l = CDR(l);
+    assert(TYPE(car(l)) == TYPE_CHARACTER);
+    string->string.string[i] = car(l)->character.c;
+    l = cdr(l);
   }
   return string;
 }
@@ -3049,10 +3072,10 @@ static obj_t make_hashtable(obj_t operator, obj_t rest, hash_t hashf, cmp_t cmpf
   size_t length = 0;
   if (rest == obj_empty)
     length = 8;
-  else unless(CDR(rest) == obj_empty)
+  else unless(cdr(rest) == obj_empty)
     error("%s: too many arguments", operator->operator.name);
   else {
-    obj_t arg = CAR(rest);
+    obj_t arg = car(rest);
     unless(TYPE(arg) == TYPE_INTEGER)
       error("%s: first argument must be an integer", operator->operator.name);
     unless(arg->integer.integer > 0)
