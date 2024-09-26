@@ -292,9 +292,13 @@ static inline obj_t cddar(obj_t pair) { return cdr(cdr(car(pair))); }
 static inline obj_t cdddr(obj_t pair) { return cdr(cdr(cdr(pair))); }
 
 static inline void set_car(obj_t pair, obj_t value) {
+  gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
+                   gc_edge(&pair->pair.car), gc_ref_from_heap_object(value));
   pair->pair.car = value;
 }
 static inline void set_cdr(obj_t pair, obj_t value) {
+  gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
+                   gc_edge(&pair->pair.cdr), gc_ref_from_heap_object(value));
   pair->pair.cdr = value;
 }
 
@@ -545,6 +549,9 @@ static void table_rehash(obj_t tbl)
   }
 
   assert(new_buckets->buckets.used == table_size(tbl));
+  gc_write_barrier(gc_ref_from_heap_object(tbl), sizeof(table_s),
+                   gc_edge(&tbl->table.buckets),
+                   gc_ref_from_heap_object(new_buckets));
   tbl->table.buckets = new_buckets;
 }
 
@@ -2520,7 +2527,11 @@ static obj_t entry_force(obj_t env, obj_t op_env, obj_t operator, obj_t operands
     obj_t closure = promise->promise.fulfiller;
     assert(TYPE(closure) == TYPE_OPERATOR);
     assert(closure->operator.arguments == obj_empty);
-    promise->promise.fulfiller = (*closure->operator.entry)(env, op_env, closure, obj_empty);
+    obj_t value = (*closure->operator.entry)(env, op_env, closure, obj_empty);
+    gc_write_barrier(gc_ref_from_heap_object(promise), sizeof(promise_s),
+                     gc_edge(&promise->promise.fulfiller),
+                     gc_ref_from_heap_object(value));
+    promise->promise.fulfiller = value;
     promise->promise.fulfilledp = true;
   }
   return promise->promise.fulfiller;
