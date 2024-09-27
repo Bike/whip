@@ -9,12 +9,13 @@
 
 /* obj_t -- scheme object type
  *
- * obj_t is a pointer to a union, obj_u, which has members for
- * each scheme representation.
+ * obj_t is a void*. This is proximally because whippet
+ * ephemerons are in a different translation unit, but also this
+ * matches the complexity of a real Lisp system with a bunch of
+ * different types - they're not all going into a union.
  *
- * The obj_u also has a "type" member.  Each representation
- * structure also has a "type" field first.  ANSI C guarantees
- * that these type fields correspond [section?].
+ * Each representation structure also has a "type" field first.
+ * ANSI C guarantees that these type fields correspond [section?].
  *
  * Objects are allocated by allocating one of the representation
  * structures and casting the pointer to it to type obj_t.  This
@@ -26,7 +27,7 @@
  *   if(TYPE(obj) == TYPE_PAIR) fiddle_with(CAR(obj));
  */
 
-typedef union obj_u *obj_t;
+typedef void *obj_t;
 
 typedef obj_t (*entry_t)(obj_t env, obj_t op_env, obj_t operator, obj_t rands);
 
@@ -131,7 +132,7 @@ typedef struct buckets_s {
 
 /* structure macros */
 
-#define TYPE(obj) (header_live_alloc_kind((obj)->type.header.header))
+#define TYPE(obj) (header_live_alloc_kind(((type_s*)(obj))->header.header))
 
 #define FOR_EACH_HEAP_OBJECT_KIND(OP)           \
   OP(pair, Pair, PAIR)                          \
@@ -147,13 +148,6 @@ typedef struct buckets_s {
   OP(table, Table, TABLE)                       \
   OP(buckets, Buckets, BUCKETS)
 
-typedef union obj_u {
-  type_s type;                  /* one of TYPE_* */
-#define UNION_FIELD(name, Name, NAME) name##_s name;
-  FOR_EACH_HEAP_OBJECT_KIND(UNION_FIELD)
-#undef UNION_FIELD
-} obj_s;
-
 /* Accessing typed objects
  * Abstracted through functions for when I need to change stuff later.
  * cTYPE(obj_t) gets you a TYPE_s. c is for cast.
@@ -161,7 +155,7 @@ typedef union obj_u {
  */
 
 #define DEFCASTER(name, Name, NAME) \
-  static inline name##_s* c##name(obj_t o) { return &o->name; }
+  static inline name##_s* c##name(obj_t o) { return (name##_s*)o; }
 FOR_EACH_HEAP_OBJECT_KIND(DEFCASTER)
 #undef DEFCASTER
 
