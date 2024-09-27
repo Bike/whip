@@ -274,6 +274,23 @@ static obj_t make_table(size_t length, hash_t hashf, cmp_t cmpf)
   return obj;
 }
 
+// A weak box is just an ephemeron with irrelevant value.
+// We use the object itself as a value to avoid having to reference
+// any global objects, but I don't think it's important.
+// The basic ephemeron rule is that the key is not traced through the
+// ephemeron, and the value is only traced if the key ended up being
+// traced (from some other reference).
+static obj_t make_weak_box(obj_t object) {
+  weak_box_s* r = gc_allocate_ephemeron(mutator);
+
+  ((type_s*)r)->header.header = header_live(TYPE_WEAK_BOX);
+  gc_ephemeron_init(mutator, r,
+                    gc_ref_from_heap_object(object),
+                    gc_ref_from_heap_object(object));
+
+  return r;
+}
+
 /* list access */
 
 static inline obj_t car(obj_t pair) { return cpair(pair)->car; }
@@ -312,6 +329,16 @@ static inline void vset(obj_t vec, size_t i, obj_t value) {
                    gc_edge(&cvector(vec)->vector[i]),
                    gc_ref_from_heap_object(value));
   cvector(vec)->vector[i] = value;
+}
+
+/* weak box access */
+
+static inline obj_t weak_box_value(obj_t box, obj_t defact) {
+  struct gc_ref ref = gc_ephemeron_key(cweak_box(box));
+  if (gc_ref_is_heap_object(ref))
+    return gc_ref_heap_object(ref);
+  else
+    return defact;
 }
 
 /* getnbc -- get next non-blank char from stream */
@@ -766,6 +793,12 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
 
     case TYPE_CHARACTER: {
       fprintf(stream, "#\\%c", ccharacter(obj)->c);
+    } break;
+
+    case TYPE_WEAK_BOX: {
+      fputs("#[weak-box ", stream);
+      print(weak_box_value(obj, obj_false), depth - 1, stream);
+      putc(']', stream);
     } break;
 
     default:
@@ -3288,6 +3321,32 @@ static obj_t entry_hashtable_keys(obj_t env, obj_t op_env, obj_t operator, obj_t
   return vector;
 }
 
+/* Weak pointers */
+
+static obj_t entry_make_weak_box(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t obj;
+  eval_args(coperator(operator)->name, env, op_env, operands, 1, &obj);
+  return make_weak_box(obj);
+}
+
+static obj_t entry_weak_box_value(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t box, rest, defact = obj_false;
+  eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 1, &box);
+  unless(TYPE(box) == TYPE_WEAK_BOX)
+    error("%s: first argument must be a weak box", coperator(operator)->name);
+  unless(rest == obj_empty) {
+    unless(cdr(rest) == obj_empty)
+      error("%s: too many arguments", coperator(operator)->name);
+    defact = car(rest);
+  }
+  return weak_box_value(box, defact);
+}
+
+static obj_t entry_weak_box_p(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t box;
+  eval_args(coperator(operator)->name, env, op_env, operands, 1, &box);
+  return TYPE(box) == TYPE_WEAK_BOX ? obj_true : obj_false;
+}
 
 /* (gc)
  * Run a full garbage collection now.
@@ -3447,6 +3506,9 @@ static struct {char *name; entry_t entry;} funtab[] = {
   {"eqv-hash", entry_eqv_hash},
   {"gc", entry_gc},
   {"room", entry_room},
+  {"make-weak-box", entry_make_weak_box},
+  {"weak-box-value", entry_weak_box_value},
+  {"weak-box?", entry_weak_box_p},
 };
 
 /* more GC interactions */

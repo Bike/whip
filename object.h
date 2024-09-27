@@ -3,6 +3,7 @@
 #include <stdio.h> // FILE
 #include <stdbool.h>
 #include "header.h"
+#include "gc-ephemeron.h"
 
 /* DATA TYPES */
 
@@ -44,7 +45,8 @@ enum {
   TYPE_CHARACTER,
   TYPE_VECTOR,
   TYPE_TABLE,
-  TYPE_BUCKETS
+  TYPE_BUCKETS,
+  TYPE_WEAK_BOX
 };
 
 // Not a real type - used to get the header from the union
@@ -130,6 +132,8 @@ typedef struct buckets_s {
   } bucket[];                   /* hash buckets */
 } buckets_s;
 
+typedef struct gc_ephemeron weak_box_s;
+
 /* structure macros */
 
 #define TYPE(obj) (header_live_alloc_kind(((type_s*)(obj))->header.header))
@@ -146,7 +150,8 @@ typedef struct buckets_s {
        OP(character, Character, CHARACTER)      \
   OP(vector, Vector, VECTOR)                    \
   OP(table, Table, TABLE)                       \
-  OP(buckets, Buckets, BUCKETS)
+  OP(buckets, Buckets, BUCKETS)                 \
+  OP(weak_box, WeakBox, WEAK_BOX)
 
 /* Accessing typed objects
  * Abstracted through functions for when I need to change stuff later.
@@ -194,6 +199,10 @@ DEFINE_SIZEOF(table);
 
 static inline size_t buckets_osize(buckets_s *b) {
   return sizeof(buckets_s) + b->length * 2 * sizeof(obj_t);
+}
+
+static inline size_t weak_box_osize(weak_box_s *b) {
+  return gc_ephemeron_size();
 }
 
 #undef DEFINE_SIZEOF
