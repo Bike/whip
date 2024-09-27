@@ -112,8 +112,8 @@ typedef struct vector_s {
   obj_t vector[];               /* vector elements */
 } vector_s;
 
-typedef unsigned long (*hash_t)(obj_t obj);
-typedef int (*cmp_t)(obj_t obj1, obj_t obj2);
+typedef size_t (*hash_t)(obj_t obj);
+typedef bool (*cmp_t)(obj_t obj1, obj_t obj2);
 
 typedef struct table_s {
   struct gc_header header;                  /* TYPE_TABLE */

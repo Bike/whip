@@ -154,7 +154,7 @@ static void error(char *format, ...)
  * instance of that type.
  */
 
-static obj_t make_bool(int condition)
+static obj_t make_bool(bool condition)
 {
   return condition ? obj_true : obj_false;
 }
@@ -366,7 +366,7 @@ static int getnbc(FILE *stream)
  * extended characters.
  */
 
-static int isealpha(int c)
+static bool isealpha(int c)
 {
   return strchr("+-.*/<=>!?:$%_&~^", c) != NULL;
 }
@@ -378,9 +378,9 @@ static int isealpha(int c)
  * Paul Haahr's hash in the most excellent rc 1.4.
  */
 
-static unsigned long hash(const char *s, size_t length) {
+static size_t hash(const char *s, size_t length) {
   char c;
-  unsigned long h=0;
+  size_t h = 0;
   size_t i = 0;
   switch(length % 4) {
     do {
@@ -410,7 +410,7 @@ static unsigned long hash(const char *s, size_t length) {
  */
 
 static obj_t *find(char *string) {
-  unsigned long i, h, probe;
+  size_t i, h, probe;
 
   h = hash(string, strlen(string));
   probe = (h >> 8) | 1;
@@ -431,9 +431,9 @@ static obj_t *find(char *string) {
 
 static void rehash(void) {
   obj_t *old_symtab = symtab;
-  unsigned old_symtab_size = symtab_size;
+  size_t old_symtab_size = symtab_size;
   struct handle *old_symtab_root = symtab_root;
-  unsigned i;
+  size_t i;
 
   symtab_size *= 2;
   symtab = malloc(sizeof(obj_t) * symtab_size);
@@ -479,19 +479,19 @@ static obj_t intern(char *string) {
 
 /* Hash table implementation */
 
-static unsigned long eq_hash(obj_t obj)
+static size_t eq_hash(obj_t obj)
 {
   union {char s[sizeof(obj_t)]; obj_t addr;} u = {""};
   u.addr = obj;
   return hash(u.s, sizeof(obj_t));
 }
 
-static int eqp(obj_t obj1, obj_t obj2)
+static bool eqp(obj_t obj1, obj_t obj2)
 {
   return obj1 == obj2;
 }
 
-static unsigned long eqv_hash(obj_t obj)
+static size_t eqv_hash(obj_t obj)
 {
   switch(TYPE(obj)) {
   case TYPE_INTEGER:
@@ -503,30 +503,30 @@ static unsigned long eqv_hash(obj_t obj)
   }
 }
 
-static int eqvp(obj_t obj1, obj_t obj2)
+static bool eqvp(obj_t obj1, obj_t obj2)
 {
   if (obj1 == obj2)
-    return 1;
+    return true;
   if (TYPE(obj1) != TYPE(obj2))
-    return 0;
+    return false;
   switch(TYPE(obj1)) {
   case TYPE_INTEGER:
     return cinteger(obj1)->integer == cinteger(obj2)->integer;
   case TYPE_CHARACTER:
     return ccharacter(obj1)->c == ccharacter(obj2)->c;
   default:
-    return 0;
+    return false;
   }
 }
 
-static unsigned long string_hash(obj_t obj)
+static size_t string_hash(obj_t obj)
 {
   unless(TYPE(obj) == TYPE_STRING)
     error("string-hash: argument must be a string");
   return hash(cstring(obj)->string, cstring(obj)->length);
 }
 
-static int string_equalp(obj_t obj1, obj_t obj2)
+static bool string_equalp(obj_t obj1, obj_t obj2)
 {
   return obj1 == obj2 ||
          (TYPE(obj1) == TYPE_STRING &&
@@ -537,7 +537,7 @@ static int string_equalp(obj_t obj1, obj_t obj2)
 
 static struct bucket_s *buckets_find(obj_t tbl, obj_t buckets, obj_t key)
 {
-  unsigned long i, h, probe;
+  size_t i, h, probe;
   struct bucket_s *result = NULL;
   assert(TYPE(tbl) == TYPE_TABLE);
   assert(TYPE(buckets) == TYPE_BUCKETS);
@@ -604,7 +604,7 @@ static obj_t table_ref(obj_t tbl, obj_t key)
   return NULL;
 }
 
-static int table_full(obj_t tbl)
+static bool table_full(obj_t tbl)
 {
   assert(TYPE(tbl) == TYPE_TABLE);
   return cbuckets(ctable(tbl)->buckets)->used >= cbuckets(ctable(tbl)->buckets)->length / 2;
@@ -1190,9 +1190,9 @@ static obj_t eval_list(obj_t env, obj_t op_env, obj_t list, char *message)
  */
 
 static obj_t eval_args1(char *name, obj_t env, obj_t op_env,
-                        obj_t operands, unsigned n, va_list args)
+                        obj_t operands, size_t n, va_list args)
 {
-  unsigned i;
+  size_t i;
   for(i = 0; i < n; ++i) {
     unless(TYPE(operands) == TYPE_PAIR)
       error("eval: too few arguments to %s", name);
@@ -1215,7 +1215,7 @@ static obj_t eval_args1(char *name, obj_t env, obj_t op_env,
  */
 
 static void eval_args(char *name, obj_t env, obj_t op_env,
-                      obj_t operands, unsigned n, ...)
+                      obj_t operands, size_t n, ...)
 {
   va_list args;
   va_start(args, n);
@@ -1239,7 +1239,7 @@ static void eval_args(char *name, obj_t env, obj_t op_env,
  */
 
 static void eval_args_rest(char *name, obj_t env, obj_t op_env,
-                           obj_t operands, obj_t *restp, unsigned n, ...)
+                           obj_t operands, obj_t *restp, size_t n, ...)
 {
   va_list args;
   va_start(args, n);
@@ -1852,22 +1852,22 @@ static obj_t entry_eqp(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 }
 
 
-static int equalp(obj_t obj1, obj_t obj2)
+static bool equalp(obj_t obj1, obj_t obj2)
 {
   size_t i;
   if(TYPE(obj1) != TYPE(obj2))
-    return 0;
+    return false;
   switch(TYPE(obj1)) {
   case TYPE_PAIR:
     return equalp(car(obj1), car(obj2)) && equalp(cdr(obj1), cdr(obj2));
   case TYPE_VECTOR:
     if(cvector(obj1)->length != cvector(obj2)->length)
-      return 0;
+      return false;
     for(i = 0; i < cvector(obj1)->length; ++i) {
       if(!equalp(vref(obj1, i), vref(obj2, i)))
-        return 0;
+        return false;
     }
-    return 1;
+    return true;
   case TYPE_STRING:
     return cstring(obj1)->length == cstring(obj2)->length
       && 0 == strcmp(cstring(obj1)->string, cstring(obj2)->string);
