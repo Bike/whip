@@ -154,6 +154,16 @@ typedef union obj_u {
 #undef UNION_FIELD
 } obj_s;
 
+/* Accessing typed objects
+ * Abstracted through functions for when I need to change stuff later.
+ * cTYPE(obj_t) gets you a TYPE_s. c is for cast.
+ * Does not type check.
+ */
+
+#define DEFCASTER(name, Name, NAME) \
+  static inline name##_s* c##name(obj_t o) { return &o->name; }
+FOR_EACH_HEAP_OBJECT_KIND(DEFCASTER)
+#undef DEFCASTER
 
 /* Sizing objects
  * These are used by the GC in gc-embed.h, but also by us.
