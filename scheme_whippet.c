@@ -176,7 +176,7 @@ static obj_t make_promise(obj_t fulfiller)
   return obj;
 }
 
-static obj_t make_integer(long integer)
+static obj_t make_integer(intptr_t integer)
 {
   obj_t obj = gc_allocate_with_type(mutator, TYPE_INTEGER, sizeof(integer_s));
   cinteger(obj)->integer = integer;
@@ -398,7 +398,7 @@ static bool isealpha(int c)
 }
 
 
-/* hash -- hash a string to an unsigned long
+/* hash -- hash a string to a size_t
  *
  * This hash function was derived (with permission) from
  * Paul Haahr's hash in the most excellent rc 1.4.
@@ -842,7 +842,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
 
 static obj_t read_integer(FILE *stream, int c)
 {
-  long integer = 0;
+  intptr_t integer = 0;
 
   do {
     integer = integer*10 + c-'0';
@@ -2057,7 +2057,7 @@ static obj_t entry_list(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static obj_t entry_length(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t arg;
-  long length;
+  intptr_t length;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   length = 0;
   while(TYPE(arg) == TYPE_PAIR) {
@@ -2208,7 +2208,7 @@ static obj_t entry_apply(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 static obj_t entry_add(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t args;
-  long result;
+  intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 0);
   result = 0;
   while(TYPE(args) == TYPE_PAIR) {
@@ -2229,7 +2229,7 @@ static obj_t entry_add(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static obj_t entry_multiply(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t args;
-  long result;
+  intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 0);
   result = 1;
   while(TYPE(args) == TYPE_PAIR) {
@@ -2254,7 +2254,7 @@ static obj_t entry_multiply(obj_t env, obj_t op_env, obj_t operator, obj_t opera
 static obj_t entry_subtract(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t arg, args;
-  long result;
+  intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(TYPE(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
@@ -2285,7 +2285,7 @@ static obj_t entry_subtract(obj_t env, obj_t op_env, obj_t operator, obj_t opera
 static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t arg, args;
-  long result;
+  intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(TYPE(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
@@ -2317,7 +2317,7 @@ static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 static obj_t entry_lessthan(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t arg, args;
-  long last;
+  intptr_t last;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(TYPE(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
@@ -2343,7 +2343,7 @@ static obj_t entry_lessthan(obj_t env, obj_t op_env, obj_t operator, obj_t opera
 static obj_t entry_greaterthan(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t arg, args;
-  long last;
+  intptr_t last;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(TYPE(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);

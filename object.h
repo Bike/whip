@@ -74,7 +74,7 @@ typedef struct symbol_s {
 
 typedef struct integer_s {
   struct gc_header header;                  /* TYPE_INTEGER */
-  long integer;                 /* the integer */
+  intptr_t integer;                 /* the integer */
 } integer_s;
 
 typedef struct special_s {
