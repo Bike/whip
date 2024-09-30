@@ -75,6 +75,7 @@ static obj_t obj_false;         /* #f, boolean false */
 static obj_t obj_undefined;     /* undefined result indicator */
 static obj_t obj_tail;          /* tail recursion indicator */
 static obj_t obj_deleted;       /* deleted key in hashtable */
+static obj_t obj_unused;        /* unused slot in hashtable */
 
 
 /* predefined symbols
@@ -256,8 +257,8 @@ static obj_t make_buckets(size_t length)
   cbuckets(obj)->used = 0;
   cbuckets(obj)->deleted = 0;
   for(i = 0; i < length; ++i) {
-    cbuckets(obj)->bucket[i].key = NULL;
-    cbuckets(obj)->bucket[i].value = NULL;
+    cbuckets(obj)->bucket[i].key = obj_unused;
+    cbuckets(obj)->bucket[i].value = obj_unused;
   }
   return obj;
 }
@@ -404,7 +405,7 @@ static size_t hash(const char *s, size_t length) {
  * Look for a symbol matching the string in the symbol table.
  * If the symbol was found, returns the address of the symbol
  * table entry which points to the symbol.  Otherwise it
- * either returns the address of a NULL entry into which the
+ * either returns the address of an unused entry into which the
  * new symbol should be inserted, or NULL if the symbol table
  * is full.
  */
@@ -439,15 +440,15 @@ static void rehash(void) {
   symtab = malloc(sizeof(obj_t) * symtab_size);
   if(symtab == NULL) error("out of memory");
 
-  /* Initialize the new table to NULL so that "find" will work. */
+  /* Initialize the new table to unused so that "find" will work. */
   for(i = 0; i < symtab_size; ++i)
     symtab[i] = NULL;
 
   for(i = 0; i < old_symtab_size; ++i)
     if(old_symtab[i] != NULL) {
       obj_t *where = find(csymbol(old_symtab[i])->string);
-      assert(where != NULL);    /* new table shouldn't be full */
-      assert(*where == NULL);   /* shouldn't be in new table */
+      assert(where != NULL);        /* new table shouldn't be full */
+      assert(*where == NULL); /* shouldn't be in new table */
       *where = old_symtab[i];
     }
 
@@ -470,7 +471,7 @@ static obj_t intern(char *string) {
     assert(where != NULL);      /* shouldn't be full after rehash */
   }
 
-  if(*where == NULL)            /* symbol not found in table */
+  if(*where == NULL)      /* symbol not found in table */
     *where = make_symbol(strlen(string), string);
 
   return *where;
@@ -547,7 +548,7 @@ static struct bucket_s *buckets_find(obj_t tbl, obj_t buckets, obj_t key)
   i = h;
   do {
     struct bucket_s *b = &cbuckets(buckets)->bucket[i];
-    if(b->key == NULL || ctable(tbl)->cmp(b->key, key))
+    if(b->key == obj_unused || ctable(tbl)->cmp(b->key, key))
       return b;
     if(result == NULL && b->key == obj_deleted)
       result = b;
@@ -578,10 +579,10 @@ static void table_rehash(obj_t tbl)
 
   for (i = 0; i < old_length; ++i) {
     struct bucket_s *old_b = &cbuckets(ctable(tbl)->buckets)->bucket[i];
-    if (old_b->key != NULL && old_b->key != obj_deleted) {
+    if (old_b->key != obj_unused && old_b->key != obj_deleted) {
       struct bucket_s *b = buckets_find(tbl, new_buckets, old_b->key);
-      assert(b != NULL);        /* new table shouldn't be full */
-      assert(b->key == NULL);   /* shouldn't be in new table */
+      assert(b != NULL);            /* new table shouldn't be full */
+      assert(b->key == obj_unused); /* shouldn't be in new table */
       *b = *old_b;
       ++ cbuckets(new_buckets)->used;
     }
@@ -599,7 +600,7 @@ static obj_t table_ref(obj_t tbl, obj_t key)
   struct bucket_s *b;
   assert(TYPE(tbl) == TYPE_TABLE);
   b = buckets_find(tbl, ctable(tbl)->buckets, key);
-  if (b && b->key != NULL && b->key != obj_deleted)
+  if (b && b->key != obj_unused && b->key != obj_deleted)
     return b->value;
   return NULL;
 }
@@ -619,7 +620,7 @@ static void table_set(obj_t tbl, obj_t key, obj_t value)
     b = buckets_find(tbl, ctable(tbl)->buckets, key);
     assert(b != NULL);          /* shouldn't be full after rehash */
   }
-  if (b->key == NULL) {
+  if (b->key == obj_unused) {
     b->key = key;
     ++ cbuckets(ctable(tbl)->buckets)->used;
   } else if (b->key == obj_deleted) {
@@ -635,7 +636,7 @@ static void table_delete(obj_t tbl, obj_t key)
   struct bucket_s *b;
   assert(TYPE(tbl) == TYPE_TABLE);
   b = buckets_find(tbl, ctable(tbl)->buckets, key);
-  if (b != NULL && b->key != NULL) {
+  if (b != NULL && b->key != obj_unused) {
     b->key = obj_deleted;
     ++ cbuckets(ctable(tbl)->buckets)->deleted;
   }
@@ -757,7 +758,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
       size_t i;
       for(i = 0; i < cbuckets(obj)->length; ++i) {
         struct bucket_s *b = &cbuckets(obj)->bucket[i];
-        if(b->key != NULL && b->key != obj_deleted) {
+        if(b->key != obj_unused && b->key != obj_deleted) {
           fputs(" (", stream);
           print(b->key, depth - 1, stream);
           putc(' ', stream);
@@ -1361,7 +1362,7 @@ static obj_t entry_quote(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 
 static obj_t entry_define(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
-  obj_t symbol = NULL, value = NULL;
+  obj_t symbol, value;
   unless(TYPE(operands) == TYPE_PAIR &&
          TYPE(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
@@ -3314,7 +3315,7 @@ static obj_t entry_hashtable_keys(obj_t env, obj_t op_env, obj_t operator, obj_t
   vector = make_vector(table_size(tbl), obj_undefined);
   for(i = 0; i < cbuckets(ctable(tbl)->buckets)->length; ++i) {
     struct bucket_s *b = &cbuckets(ctable(tbl)->buckets)->bucket[i];
-    if(b->key != NULL && b->key != obj_deleted)
+    if(b->key != obj_unused && b->key != obj_deleted)
       vset(vector, j++, b->value);
   }
   assert(j == cvector(vector)->length);
@@ -3381,7 +3382,8 @@ static struct {char *name; obj_t *varp;} sptab[] = {
   {"#f", &obj_false},
   {"#[undefined]", &obj_undefined},
   {"#[tail]", &obj_tail},
-  {"#[deleted]", &obj_deleted}
+  {"#[deleted]", &obj_deleted},
+  {"#[unused]", &obj_unused}
 };
 
 
