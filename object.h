@@ -46,7 +46,8 @@ enum {
   TYPE_VECTOR,
   TYPE_TABLE,
   TYPE_BUCKETS,
-  TYPE_WEAK_BOX
+  TYPE_WEAK_BOX,
+  TYPE_EPHEMERON
 };
 
 // Not a real type - used to get the header from the union
@@ -133,6 +134,7 @@ typedef struct buckets_s {
 } buckets_s;
 
 typedef struct gc_ephemeron weak_box_s;
+typedef struct gc_ephemeron ephemeron_s;
 
 /* structure macros */
 
@@ -151,7 +153,8 @@ typedef struct gc_ephemeron weak_box_s;
   OP(vector, Vector, VECTOR)                    \
   OP(table, Table, TABLE)                       \
   OP(buckets, Buckets, BUCKETS)                 \
-  OP(weak_box, WeakBox, WEAK_BOX)
+  OP(weak_box, WeakBox, WEAK_BOX)               \
+  OP(ephemeron, Ephemeron, EPHEMERON)
 
 /* Accessing typed objects
  * Abstracted through functions for when I need to change stuff later.
@@ -202,6 +205,10 @@ static inline size_t buckets_osize(buckets_s *b) {
 }
 
 static inline size_t weak_box_osize(weak_box_s *b) {
+  return gc_ephemeron_size();
+}
+
+static inline size_t ephemeron_osize(ephemeron_s *b) {
   return gc_ephemeron_size();
 }
 

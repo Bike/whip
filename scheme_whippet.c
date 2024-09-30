@@ -292,6 +292,16 @@ static obj_t make_weak_box(obj_t object) {
   return r;
 }
 
+static obj_t make_ephemeron(obj_t key, obj_t value) {
+  ephemeron_s* r = gc_allocate_ephemeron(mutator);
+
+  ((type_s*)r)->header.header = header_live(TYPE_EPHEMERON);
+  gc_ephemeron_init(mutator, r,
+                    gc_ref_from_heap_object(key),
+                    gc_ref_from_heap_object(value));
+  return r;
+}
+
 /* list access */
 
 static inline obj_t car(obj_t pair) { return cpair(pair)->car; }
@@ -336,6 +346,21 @@ static inline void vset(obj_t vec, size_t i, obj_t value) {
 
 static inline obj_t weak_box_value(obj_t box, obj_t defact) {
   struct gc_ref ref = gc_ephemeron_key(cweak_box(box));
+  if (gc_ref_is_heap_object(ref))
+    return gc_ref_heap_object(ref);
+  else
+    return defact;
+}
+
+/* ephemeron access */
+
+static inline obj_t ephemeron_value(obj_t eph, obj_t defact, obj_t keepalive) {
+  // keepalive is an object that remains live during access in order to ensure
+  // the ephemeron isn't wiped. check racket ephemeron-value.
+  // since we have conservative stack roots, this is unnecessary right now,
+  // I think.
+  (void)keepalive;
+  struct gc_ref ref = gc_ephemeron_value(cephemeron(eph));
   if (gc_ref_is_heap_object(ref))
     return gc_ref_heap_object(ref);
   else
@@ -799,6 +824,12 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
     case TYPE_WEAK_BOX: {
       fputs("#[weak-box ", stream);
       print(weak_box_value(obj, obj_false), depth - 1, stream);
+      putc(']', stream);
+    } break;
+
+    case TYPE_EPHEMERON: {
+      fputs("#[ephemeron ", stream);
+      print(ephemeron_value(obj, obj_false, obj_false), depth - 1, stream);
       putc(']', stream);
     } break;
 
@@ -3349,6 +3380,37 @@ static obj_t entry_weak_box_p(obj_t env, obj_t op_env, obj_t operator, obj_t ope
   return TYPE(box) == TYPE_WEAK_BOX ? obj_true : obj_false;
 }
 
+/* ephemerons */
+
+static obj_t entry_make_ephemeron(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t key, value;
+  eval_args(coperator(operator)->name, env, op_env, operands, 2, &key, &value);
+  return make_ephemeron(key, value);
+}
+
+static obj_t entry_ephemeron_value(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t eph, rest, defact = obj_false, retain = obj_false;
+  eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 1, &eph);
+  unless(TYPE(eph) == TYPE_EPHEMERON)
+    error("%s: first argument must be an ephemeron", coperator(operator)->name);
+  unless(rest == obj_empty) {
+    unless(cdr(rest) == obj_empty) {
+      unless(cddr(rest) == obj_empty)
+        error("%s: too many arguments", coperator(operator)->name);
+      retain = cadr(rest);
+    }
+    defact = car(rest);
+  }
+
+  return ephemeron_value(eph, defact, retain);
+}
+
+static obj_t entry_ephemeronp(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t eph;
+  eval_args(coperator(operator)->name, env, op_env, operands, 1, &eph);
+  return TYPE(eph) == TYPE_EPHEMERON ? obj_true : obj_false;
+}
+
 /* (gc)
  * Run a full garbage collection now.
  */
@@ -3511,6 +3573,9 @@ static struct {char *name; entry_t entry;} funtab[] = {
   {"make-weak-box", entry_make_weak_box},
   {"weak-box-value", entry_weak_box_value},
   {"weak-box?", entry_weak_box_p},
+  {"make-ephemeron", entry_make_ephemeron},
+  {"ephemeron-value", entry_ephemeron_value},
+  {"ephemeron?", entry_ephemeronp},
 };
 
 /* more GC interactions */

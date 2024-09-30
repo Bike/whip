@@ -109,6 +109,12 @@ visit_weak_box_fields(weak_box_s* weak_box, visitor visit,
   gc_trace_ephemeron(weak_box, visit, heap, visit_data);
 }
 
+static inline void
+visit_ephemeron_fields(ephemeron_s* ephemeron, visitor visit,
+                       struct gc_heap *heap, void *visit_data) {
+  gc_trace_ephemeron(ephemeron, visit, heap, visit_data);
+}
+
 #undef DEFINE_FIELDLESS
 
 /* GC trace */
