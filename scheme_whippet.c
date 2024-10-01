@@ -23,6 +23,7 @@
 #include <stdbool.h> // bool
 #include <threads.h> // thread_local
 #include <stdnoreturn.h> // deprecated in C23, wah
+#include <pthread.h>
 
 #include "object.h"
 #include "roots.h"
@@ -47,6 +48,8 @@
 static struct gc_heap_roots global_roots = {.roots = NULL};
 struct handle *add_heap_root(void**, size_t);
 bool remove_heap_root(struct handle*);
+
+struct gc_heap *heap;
 
 /* symtab -- symbol table
  *
@@ -94,6 +97,12 @@ static obj_t obj_else;          /* "else" symbol */
 static obj_t obj_unquote;       /* "unquote" symbol */
 static obj_t obj_unquote_splic; /* "unquote-splicing" symbol */
 
+/* THREAD-LOCAL DATA */
+
+// The Whippet mutator for a thread.
+static thread_local struct gc_mutator *mutator;
+// Stats collector.
+static thread_local struct gc_basic_stats gcstats;
 
 /* error handler
  *
@@ -110,15 +119,8 @@ static obj_t obj_unquote_splic; /* "unquote-splicing" symbol */
  *  be decoded by enclosing code.]
  */
 
-static jmp_buf *error_handler = NULL;
-static char error_message[MSGMAX+1];
-
-/* THREAD-LOCAL DATA */
-
-// The Whippet mutator for a thread.
-thread_local struct gc_mutator *mutator;
-// Stats collector.
-thread_local struct gc_basic_stats gcstats;
+static thread_local jmp_buf *error_handler = NULL;
+static thread_local char error_message[MSGMAX+1];
 
 /* SUPPORT FUNCTIONS */
 
@@ -273,6 +275,13 @@ static obj_t make_table(size_t length, hash_t hashf, cmp_t cmpf)
   /* round up to next power of 2 */
   for(l = 1; l < length; l *= 2);
   ctable(obj)->buckets = make_buckets(l);
+  return obj;
+}
+
+// Does not start the thread! See entry_thread for that.
+static obj_t make_thread(obj_t thunk) {
+  obj_t obj = gc_allocate_with_type(mutator, TYPE_THREAD, sizeof(thread_s));
+  cthread(obj)->thunk = thunk;
   return obj;
 }
 
@@ -835,8 +844,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
     } break;
 
     default:
-      assert(0);
-      abort();
+      fputs("#[unknown object!]", stream);
   }
 }
 
@@ -1015,7 +1023,6 @@ static obj_t read_special(FILE *stream, int c)
     }
   }
   error("read: unknown special '%c'", c);
-  return obj_error;
 }
 
 
@@ -1052,7 +1059,6 @@ static obj_t read_(FILE *stream)
     return read_symbol(stream, c);
 
   error("read: illegal char '%c'", c);
-  return obj_error;
 }
 
 
@@ -1142,7 +1148,6 @@ static obj_t eval(obj_t env, obj_t op_env, obj_t exp)
 
     if(type(exp) != TYPE_PAIR) {
       error("eval: unknown syntax");
-      return obj_error;
     }
 
     /* apply operator or function */
@@ -3354,6 +3359,94 @@ static obj_t entry_hashtable_keys(obj_t env, obj_t op_env, obj_t operator, obj_t
   return vector;
 }
 
+/* threads */
+// Passed to new threads to tell them what to call.
+// The existence of this is kind of stupid - the thunk is 0-ary and shouldn't
+// need the dynamic environment at all. Refactor? We do need the thread though.
+struct thread_arg {
+  obj_t thread;
+  obj_t thunk;
+  obj_t env; obj_t op_env;
+};
+
+// This function is called on thread exit. It deregisters the mutator
+// and marks the thread object as being done.
+static void thread_cleanup(void* arg) {
+  (void)arg;
+  gc_finish_for_thread(mutator);
+}
+
+// Almost the top of any new thread.
+static void* thread_penult(struct gc_stack_addr *base, void* arg) {
+  // Set up the mutator.
+  mutator = gc_init_for_thread(base, heap);
+  
+  // prep for cleaning it up.
+  // Note that pthread cleanups cannot be pushed between a setjmp and longjmp.
+  pthread_cleanup_push(thread_cleanup, NULL);
+  
+  // Set up the thread error handler and get going.
+  jmp_buf eh;
+  error_handler = &eh;
+  if (!setjmp(*error_handler)) {
+    obj_t thunk = cthread((obj_t)arg)->thunk;
+    // The dynamic environment of the call is empty, but consing up a new
+    // object for that would suck, so we just use the closure environment.
+    // This is ok since the dynamic environment is only used for argument
+    // evaluation here, and guess what - there aren't any.
+    // Note that we have to use eval. Calling the entry directly will not
+    // work, as for interpreted entries that returns a tail object.
+    eval(coperator(thunk)->env, coperator(thunk)->op_env,
+         make_pair(thunk, obj_empty));
+  } else { // error
+    // In a smarter system we'd record the error and make it available
+    // when the thread joins. This is not a smarter system.
+    error_handler = NULL; // paranoia
+    fflush(stdout);
+    fprintf(stderr, "in thread: %s\n", error_message);
+  }
+  pthread_cleanup_pop(1); // execute handler
+
+  return NULL;
+}
+
+// The function passed to pthread_create.
+// It gets the stack top and then actually gets going in thread_penult.
+static void *thread_ult(void* arg) {
+  return gc_call_with_stack_addr(thread_penult, arg);
+}
+
+static obj_t entry_thread(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t thunk;
+  eval_args(coperator(operator)->name, env, op_env, operands, 1, &thunk);
+  unless(type(thunk) == TYPE_OPERATOR)
+    error("%s: argument must be an operator", coperator(operator)->name);
+  obj_t thread = make_thread(thunk);
+  // Originally I had the thread arg be a local structure, but then there's
+  // an obvious race condition. Pack everything necessary into the thread
+  // object instead.
+  int r = pthread_create(&cthread(thread)->native, NULL,
+                         thread_ult, (void*)thread);
+  switch (r) {
+  case 0: return thread;
+  case EAGAIN:
+    error("%s: Insufficient resources for a new thread",
+          coperator(operator)->name);
+  case EINVAL:
+    error("%s: Invalid thread attributes", coperator(operator)->name);
+  case EPERM:
+    error("%s: No permission for provided thread attributes",
+          coperator(operator)->name);
+  default: error("%s: Unknown error", coperator(operator)->name);
+  }
+}
+
+static obj_t entry_threadp(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t thr;
+  eval_args(coperator(operator)->name, env, op_env, operands, 1, &thr);
+  return type(thr) == TYPE_THREAD ? obj_true : obj_false;
+}
+
 /* Weak pointers */
 
 static obj_t entry_make_weak_box(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
@@ -3569,6 +3662,8 @@ static struct {char *name; entry_t entry;} funtab[] = {
   {"string-hash", entry_string_hash},
   {"eq-hash", entry_eq_hash},
   {"eqv-hash", entry_eqv_hash},
+  {"thread", entry_thread},
+  {"thread?", entry_threadp},
   {"gc", entry_gc},
   {"room", entry_room},
   {"make-weak-box", entry_make_weak_box},
@@ -3622,7 +3717,6 @@ int main(int argc, char *argv[])
   if (optstr && !gc_options_parse_and_set_many(options, optstr))
     error("Failed to set GC options: '%s'\n", optstr);
 
-  struct gc_heap *heap;
   if (!gc_init(options, NULL, &heap, &mutator, GC_BASIC_STATS, &gcstats))
     error("Failed to initialize GC");
 

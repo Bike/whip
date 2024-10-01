@@ -6,7 +6,7 @@ COMPILE=$(CC) $(CFLAGS) $(INCLUDES)
 
 PLATFORM=gnu-linux
 
-gcopts := -DGC_DEBUG=1 -DGC_PRECISE_ROOTS=1 -DGC_CONSERVATIVE_ROOTS=1
+gcopts := -DGC_DEBUG=1 -DGC_PARALLEL=1 -DGC_PRECISE_ROOTS=1 -DGC_CONSERVATIVE_ROOTS=1
 collector := mmc
 
 scheme: scheme.o gc.o gc-stack.o gc-options.o gc-platform.o gc-ephemeron.o gc-finalizer.o

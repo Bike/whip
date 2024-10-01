@@ -104,6 +104,12 @@ visit_buckets_fields(buckets_s* buckets, visitor visit,
 }
 
 static inline void
+visit_thread_fields(thread_s* thread, visitor visit,
+                    struct gc_heap *heap, void *visit_data) {
+  visit(gc_edge(&thread->thunk), heap, visit_data);
+}
+
+static inline void
 visit_weak_box_fields(weak_box_s* weak_box, visitor visit,
                       struct gc_heap *heap, void *visit_data) {
   gc_trace_ephemeron(weak_box, visit, heap, visit_data);

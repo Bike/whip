@@ -3,5 +3,21 @@ If allocation fails the program dies, which sucks.
 Only supported platform is GNU/Linux currently.
 Walk all objects?
 Interior pointers?
+Have to pin any eq-hashed objects, but pointer hashing sucks inevitably
+Stop the world, but stopping is not preemptive - we may need it to be preemptive. Or maybe we need to do without_gcing around blocking I/O and stuff?
 
 need to put in write barriers for hash tables
+
+
+// weak key bucket: [eph(value, key), eph(key, box(value))]
+// weak value bucket: [eph(value, key), eph(value, box(value))]
+// weak key-and-value: [eph(key, box(eph(value, key))), eph(value, eph(key, box(value)))]
+// weak key-or-value: [eph(value, key), eph(key, box(value))]
+
+// weak key: eph(key, [key, box(value)])
+//        or box(eph(key, [key, value]))
+// weak value: box(eph(value, [key, value]))
+// weak key and value: eph(key, box(eph(value, value)))
+//                  or box(eph(key, eph(value, value)))
+// weak key or value: [box(eph(value, key)), eph(key, box(value))]
+//                 or box([eph(value, key), eph(key, value)])

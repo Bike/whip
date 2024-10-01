@@ -2,6 +2,7 @@
 
 #include <stdio.h> // FILE
 #include <stdbool.h>
+#include <pthread.h>
 #include "header.h"
 #include "gc-ephemeron.h"
 
@@ -45,6 +46,7 @@ enum type_t {
   TYPE_VECTOR,
   TYPE_TABLE,
   TYPE_BUCKETS,
+  TYPE_THREAD,
   TYPE_WEAK_BOX,
   TYPE_EPHEMERON
 };
@@ -132,6 +134,12 @@ typedef struct buckets_s {
   } bucket[];                   /* hash buckets */
 } buckets_s;
 
+typedef struct thread_s {
+  struct gc_header header;
+  obj_t thunk;
+  pthread_t native;
+} thread_s;
+
 typedef struct gc_ephemeron weak_box_s;
 typedef struct gc_ephemeron ephemeron_s;
 
@@ -154,6 +162,7 @@ static inline enum type_t type(obj_t obj) {
   OP(vector, Vector, VECTOR)                    \
   OP(table, Table, TABLE)                       \
   OP(buckets, Buckets, BUCKETS)                 \
+  OP(thread, Thread, THREAD)                    \
   OP(weak_box, WeakBox, WEAK_BOX)               \
   OP(ephemeron, Ephemeron, EPHEMERON)
 
@@ -207,6 +216,8 @@ DEFINE_SIZEOF(table);
 static inline size_t buckets_osize(buckets_s *b) {
   return sizeof(buckets_s) + b->length * 2 * sizeof(obj_t);
 }
+
+DEFINE_SIZEOF(thread);
 
 static inline size_t weak_box_osize(weak_box_s *b) {
   return gc_ephemeron_size();
