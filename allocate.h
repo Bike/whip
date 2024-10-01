@@ -4,7 +4,7 @@
 #include "gc-api.h"
 
 static inline void*
-gc_allocate_with_type(struct gc_mutator *mut, type_t type, size_t bytes) {
+gc_allocate_with_type(struct gc_mutator *mut, enum type_t type, size_t bytes) {
   void *obj = gc_allocate(mut, bytes);
   // The benchmark code does essentially
   // ref-heap-object(ref-from-heap-object obj)

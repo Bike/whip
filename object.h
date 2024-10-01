@@ -15,25 +15,24 @@
  * matches the complexity of a real Lisp system with a bunch of
  * different types - they're not all going into a union.
  *
- * Each representation structure also has a "type" field first.
- * ANSI C guarantees that these type fields correspond [section?].
+ * Each representation structure also has a "header" field first.
+ * ANSI C guarantees that these header fields correspond [section?].
  *
  * Objects are allocated by allocating one of the representation
  * structures and casting the pointer to it to type obj_t.  This
  * allows objects of different sizes to be represented by the
  * same type.
  *
- * To access an object, check its type by reading TYPE(obj), then
+ * To access an object, check its type by reading type(obj), then
  * access the fields of the representation, e.g.
- *   if(TYPE(obj) == TYPE_PAIR) fiddle_with(CAR(obj));
+ *   if(type(obj) == TYPE_PAIR) fiddle_with(CAR(obj));
  */
 
 typedef void *obj_t;
 
 typedef obj_t (*entry_t)(obj_t env, obj_t op_env, obj_t operator, obj_t rands);
 
-typedef int type_t;
-enum {
+enum type_t {
   TYPE_PAIR,
   TYPE_INTEGER,
   TYPE_SYMBOL,
@@ -138,7 +137,9 @@ typedef struct gc_ephemeron ephemeron_s;
 
 /* structure macros */
 
-#define TYPE(obj) (header_live_alloc_kind(((type_s*)(obj))->header.header))
+static inline enum type_t type(obj_t obj) {
+  return header_live_alloc_kind(((type_s*)(obj))->header.header);
+}
 
 #define FOR_EACH_HEAP_OBJECT_KIND(OP)           \
   OP(pair, Pair, PAIR)                          \

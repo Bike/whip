@@ -520,7 +520,7 @@ static bool eqp(obj_t obj1, obj_t obj2)
 
 static size_t eqv_hash(obj_t obj)
 {
-  switch(TYPE(obj)) {
+  switch(type(obj)) {
   case TYPE_INTEGER:
     return cinteger(obj)->integer;
   case TYPE_CHARACTER:
@@ -534,9 +534,9 @@ static bool eqvp(obj_t obj1, obj_t obj2)
 {
   if (obj1 == obj2)
     return true;
-  if (TYPE(obj1) != TYPE(obj2))
+  if (type(obj1) != type(obj2))
     return false;
-  switch(TYPE(obj1)) {
+  switch(type(obj1)) {
   case TYPE_INTEGER:
     return cinteger(obj1)->integer == cinteger(obj2)->integer;
   case TYPE_CHARACTER:
@@ -548,7 +548,7 @@ static bool eqvp(obj_t obj1, obj_t obj2)
 
 static size_t string_hash(obj_t obj)
 {
-  unless(TYPE(obj) == TYPE_STRING)
+  unless(type(obj) == TYPE_STRING)
     error("string-hash: argument must be a string");
   return hash(cstring(obj)->string, cstring(obj)->length);
 }
@@ -556,8 +556,8 @@ static size_t string_hash(obj_t obj)
 static bool string_equalp(obj_t obj1, obj_t obj2)
 {
   return obj1 == obj2 ||
-         (TYPE(obj1) == TYPE_STRING &&
-          TYPE(obj2) == TYPE_STRING &&
+         (type(obj1) == TYPE_STRING &&
+          type(obj2) == TYPE_STRING &&
           cstring(obj1)->length == cstring(obj2)->length &&
           0 == strcmp(cstring(obj1)->string, cstring(obj2)->string));
 }
@@ -566,8 +566,8 @@ static struct bucket_s *buckets_find(obj_t tbl, obj_t buckets, obj_t key)
 {
   size_t i, h, probe;
   struct bucket_s *result = NULL;
-  assert(TYPE(tbl) == TYPE_TABLE);
-  assert(TYPE(buckets) == TYPE_BUCKETS);
+  assert(type(tbl) == TYPE_TABLE);
+  assert(type(buckets) == TYPE_BUCKETS);
   h = ctable(tbl)->hash(key);
   probe = (h >> 8) | 1;
   h &= (cbuckets(buckets)->length-1);
@@ -586,7 +586,7 @@ static struct bucket_s *buckets_find(obj_t tbl, obj_t buckets, obj_t key)
 static size_t table_size(obj_t tbl)
 {
   size_t used, deleted;
-  assert(TYPE(tbl) == TYPE_TABLE);
+  assert(type(tbl) == TYPE_TABLE);
   used = cbuckets(ctable(tbl)->buckets)->used;
   deleted = cbuckets(ctable(tbl)->buckets)->deleted;
   assert(used >= deleted);
@@ -598,7 +598,7 @@ static void table_rehash(obj_t tbl)
   size_t i, old_length, new_length;
   obj_t new_buckets;
 
-  assert(TYPE(tbl) == TYPE_TABLE);
+  assert(type(tbl) == TYPE_TABLE);
   old_length = cbuckets(ctable(tbl)->buckets)->length;
   new_length = old_length * 2;
   new_buckets = make_buckets(new_length);
@@ -624,7 +624,7 @@ static void table_rehash(obj_t tbl)
 static obj_t table_ref(obj_t tbl, obj_t key)
 {
   struct bucket_s *b;
-  assert(TYPE(tbl) == TYPE_TABLE);
+  assert(type(tbl) == TYPE_TABLE);
   b = buckets_find(tbl, ctable(tbl)->buckets, key);
   if (b && b->key != obj_unused && b->key != obj_deleted)
     return b->value;
@@ -633,14 +633,14 @@ static obj_t table_ref(obj_t tbl, obj_t key)
 
 static bool table_full(obj_t tbl)
 {
-  assert(TYPE(tbl) == TYPE_TABLE);
+  assert(type(tbl) == TYPE_TABLE);
   return cbuckets(ctable(tbl)->buckets)->used >= cbuckets(ctable(tbl)->buckets)->length / 2;
 }
 
 static void table_set(obj_t tbl, obj_t key, obj_t value)
 {
   struct bucket_s *b;
-  assert(TYPE(tbl) == TYPE_TABLE);
+  assert(type(tbl) == TYPE_TABLE);
   if (table_full(tbl) || (b = buckets_find(tbl, ctable(tbl)->buckets, key)) == NULL) {
     table_rehash(tbl);
     b = buckets_find(tbl, ctable(tbl)->buckets, key);
@@ -660,7 +660,7 @@ static void table_set(obj_t tbl, obj_t key, obj_t value)
 static void table_delete(obj_t tbl, obj_t key)
 {
   struct bucket_s *b;
-  assert(TYPE(tbl) == TYPE_TABLE);
+  assert(type(tbl) == TYPE_TABLE);
   b = buckets_find(tbl, ctable(tbl)->buckets, key);
   if (b != NULL && b->key != obj_unused) {
     b->key = obj_deleted;
@@ -671,7 +671,7 @@ static void table_delete(obj_t tbl, obj_t key)
 
 static void print(obj_t obj, unsigned depth, FILE *stream)
 {
-  switch(TYPE(obj)) {
+  switch(type(obj)) {
     case TYPE_INTEGER: {
       fprintf(stream, "%ld", cinteger(obj)->integer);
     } break;
@@ -685,7 +685,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
     } break;
 
     case TYPE_PORT: {
-      assert(TYPE(cport(obj)->name) == TYPE_STRING);
+      assert(type(cport(obj)->name) == TYPE_STRING);
       fprintf(stream, "#[port \"%s\"]",
               cstring(cport(obj)->name)->string);
     } break;
@@ -712,8 +712,8 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
     } break;
 
     case TYPE_PAIR: {
-      if(TYPE(car(obj)) == TYPE_SYMBOL &&
-         TYPE(cdr(obj)) == TYPE_PAIR &&
+      if(type(car(obj)) == TYPE_SYMBOL &&
+         type(cdr(obj)) == TYPE_PAIR &&
          cddr(obj) == obj_empty) {
         if(car(obj) == obj_quote) {
           putc('\'', stream);
@@ -755,7 +755,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
         for(;;) {
           print(car(obj), depth - 1, stream);
           obj = cdr(obj);
-          if(TYPE(obj) != TYPE_PAIR) break;
+          if(type(obj) != TYPE_PAIR) break;
           putc(' ', stream);
         }
         if(obj != obj_empty) {
@@ -976,7 +976,7 @@ static obj_t list_to_vector(obj_t list)
   obj_t l, vector;
   i = 0;
   l = list;
-  while(TYPE(l) == TYPE_PAIR) {
+  while(type(l) == TYPE_PAIR) {
     ++i;
     l = cdr(l);
   }
@@ -985,7 +985,7 @@ static obj_t list_to_vector(obj_t list)
   vector = make_vector(i, obj_undefined);
   i = 0;
   l = list;
-  while(TYPE(l) == TYPE_PAIR) {
+  while(type(l) == TYPE_PAIR) {
     vset(vector, i, car(l));
     ++i;
     l = cdr(l);
@@ -1064,9 +1064,9 @@ static obj_t read_(FILE *stream)
 static obj_t lookup_in_frame(obj_t frame, obj_t symbol)
 {
   while(frame != obj_empty) {
-    assert(TYPE(frame) == TYPE_PAIR);
-    assert(TYPE(car(frame)) == TYPE_PAIR);
-    assert(TYPE(caar(frame)) == TYPE_SYMBOL);
+    assert(type(frame) == TYPE_PAIR);
+    assert(type(car(frame)) == TYPE_PAIR);
+    assert(type(caar(frame)) == TYPE_SYMBOL);
     if(caar(frame) == symbol)
       return car(frame);
     frame = cdr(frame);
@@ -1084,7 +1084,7 @@ static obj_t lookup(obj_t env, obj_t symbol)
 {
   obj_t binding;
   while(env != obj_empty) {
-    assert(TYPE(env) == TYPE_PAIR);
+    assert(type(env) == TYPE_PAIR);
     binding = lookup_in_frame(car(env), symbol);
     if(binding != obj_undefined)
       return binding;
@@ -1107,7 +1107,7 @@ static obj_t lookup(obj_t env, obj_t symbol)
 static void define(obj_t env, obj_t symbol, obj_t value)
 {
   obj_t binding;
-  assert(TYPE(env) == TYPE_PAIR);       /* always at least one frame */
+  assert(type(env) == TYPE_PAIR);       /* always at least one frame */
   binding = lookup_in_frame(car(env), symbol);
   if(binding != obj_undefined)
     set_cdr(binding, value);
@@ -1125,43 +1125,43 @@ static obj_t eval(obj_t env, obj_t op_env, obj_t exp)
     obj_t result;
 
     /* self-evaluating */
-    if(TYPE(exp) == TYPE_INTEGER ||
-       (TYPE(exp) == TYPE_SPECIAL && exp != obj_empty) ||
-       TYPE(exp) == TYPE_STRING ||
-       TYPE(exp) == TYPE_CHARACTER ||
-       TYPE(exp) == TYPE_OPERATOR)
+    if(type(exp) == TYPE_INTEGER ||
+       (type(exp) == TYPE_SPECIAL && exp != obj_empty) ||
+       type(exp) == TYPE_STRING ||
+       type(exp) == TYPE_CHARACTER ||
+       type(exp) == TYPE_OPERATOR)
       return exp;
 
     /* symbol lookup */
-    if(TYPE(exp) == TYPE_SYMBOL) {
+    if(type(exp) == TYPE_SYMBOL) {
       obj_t binding = lookup(env, exp);
       if(binding == obj_undefined)
         error("eval: unbound symbol \"%s\"", csymbol(exp)->string);
       return cdr(binding);
     }
 
-    if(TYPE(exp) != TYPE_PAIR) {
+    if(type(exp) != TYPE_PAIR) {
       error("eval: unknown syntax");
       return obj_error;
     }
 
     /* apply operator or function */
-    if(TYPE(car(exp)) == TYPE_SYMBOL) {
+    if(type(car(exp)) == TYPE_SYMBOL) {
       obj_t binding = lookup(op_env, car(exp));
       if(binding != obj_undefined) {
         operator = cdr(binding);
-        assert(TYPE(operator) == TYPE_OPERATOR);
+        assert(type(operator) == TYPE_OPERATOR);
         result = (*coperator(operator)->entry)(env, op_env, operator, cdr(exp));
         goto found;
       }
     }
     operator = eval(env, op_env, car(exp));
-    unless(TYPE(operator) == TYPE_OPERATOR)
+    unless(type(operator) == TYPE_OPERATOR)
       error("eval: application of non-function");
     result = (*coperator(operator)->entry)(env, op_env, operator, cdr(exp));
 
   found:
-    if (!(TYPE(result) == TYPE_PAIR && car(result) == obj_tail))
+    if (!(type(result) == TYPE_PAIR && car(result) == obj_tail))
       return result;
 
     env = cadr(result);
@@ -1203,7 +1203,7 @@ static obj_t eval_list(obj_t env, obj_t op_env, obj_t list, char *message)
   result = obj_empty;
   end = NULL;                   /* suppress "uninitialized" warning in GCC */
   while(list != obj_empty) {
-    if(TYPE(list) != TYPE_PAIR)
+    if(type(list) != TYPE_PAIR)
       error(message);
     pair = make_pair(eval(env, op_env, car(list)), obj_empty);
     if(result == obj_empty)
@@ -1227,7 +1227,7 @@ static obj_t eval_args1(char *name, obj_t env, obj_t op_env,
 {
   size_t i;
   for(i = 0; i < n; ++i) {
-    unless(TYPE(operands) == TYPE_PAIR)
+    unless(type(operands) == TYPE_PAIR)
       error("eval: too few arguments to %s", name);
     *va_arg(args, obj_t *) = eval(env, op_env, car(operands));
     operands = cdr(operands);
@@ -1308,7 +1308,7 @@ static obj_t eval_tail(obj_t env, obj_t op_env, obj_t exp)
 static obj_t eval_body(obj_t env, obj_t op_env, obj_t operator, obj_t body)
 {
   for (;;) {
-    if (TYPE(body) != TYPE_PAIR)
+    if (type(body) != TYPE_PAIR)
       error("%s: illegal expression list", coperator(operator)->name);
     if (cdr(body) == obj_empty)
       return eval_tail(env, op_env, car(body));
@@ -1335,7 +1335,7 @@ static obj_t entry_interpret(obj_t env, obj_t op_env, obj_t operator, obj_t oper
 {
   obj_t arguments, fun_env, fun_op_env;
 
-  assert(TYPE(operator) == TYPE_OPERATOR);
+  assert(type(operator) == TYPE_OPERATOR);
 
   /* Make a new frame so that bindings are local to the function. */
   /* Arguments will be bound in this new frame. */
@@ -1346,14 +1346,14 @@ static obj_t entry_interpret(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   while(operands != obj_empty) {
     if(arguments == obj_empty)
       error("eval: function applied to too many arguments");
-    if(TYPE(arguments) == TYPE_SYMBOL) {
+    if(type(arguments) == TYPE_SYMBOL) {
       define(fun_env, arguments,
              eval_list(env, op_env, operands, "eval: badly formed argument list"));
       operands = obj_empty;
       arguments = obj_empty;
     } else {
-      assert(TYPE(arguments) == TYPE_PAIR &&
-             TYPE(car(arguments)) == TYPE_SYMBOL);
+      assert(type(arguments) == TYPE_PAIR &&
+             type(car(arguments)) == TYPE_SYMBOL);
       define(fun_env,
              car(arguments),
              eval(env, op_env, car(operands)));
@@ -1376,7 +1376,7 @@ static obj_t entry_interpret(obj_t env, obj_t op_env, obj_t operator, obj_t oper
 
 static obj_t entry_quote(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
-  unless(TYPE(operands) == TYPE_PAIR &&
+  unless(type(operands) == TYPE_PAIR &&
          cdr(operands) == obj_empty)
     error("%s: illegal syntax", coperator(operator)->name);
   return car(operands);
@@ -1395,16 +1395,16 @@ static obj_t entry_quote(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 static obj_t entry_define(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t symbol, value;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
-  if(TYPE(car(operands)) == TYPE_SYMBOL) {
+  if(type(car(operands)) == TYPE_SYMBOL) {
     unless(cddr(operands) == obj_empty)
       error("%s: too many arguments", coperator(operator)->name);
     symbol = car(operands);
     value = eval(env, op_env, cadr(operands));
-  } else if(TYPE(car(operands)) == TYPE_PAIR &&
-            TYPE(caar(operands)) == TYPE_SYMBOL) {
+  } else if(type(car(operands)) == TYPE_PAIR &&
+            type(caar(operands)) == TYPE_SYMBOL) {
     symbol = caar(operands);
     value = eval(env, op_env,
                  make_pair(obj_lambda,
@@ -1425,17 +1425,17 @@ static obj_t entry_define(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 static obj_t entry_if(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t test;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR &&
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR &&
          (cddr(operands) == obj_empty ||
-          (TYPE(cddr(operands)) == TYPE_PAIR &&
+          (type(cddr(operands)) == TYPE_PAIR &&
            cdddr(operands) == obj_empty)))
     error("%s: illegal syntax", coperator(operator)->name);
   test = eval(env, op_env, car(operands));
   /* Anything which is not #f counts as true [R4RS 6.1]. */
   if(test != obj_false)
     return eval_tail(env, op_env, cadr(operands));
-  if(TYPE(cddr(operands)) == TYPE_PAIR)
+  if(type(cddr(operands)) == TYPE_PAIR)
     return eval_tail(env, op_env, caddr(operands));
   return obj_undefined;
 }
@@ -1448,13 +1448,13 @@ static obj_t entry_if(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 
 static obj_t entry_cond(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
-  unless(TYPE(operands) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
-  while(TYPE(operands) == TYPE_PAIR) {
+  while(type(operands) == TYPE_PAIR) {
     obj_t clause = car(operands);
     obj_t result;
-    unless(TYPE(clause) == TYPE_PAIR &&
-           TYPE(cdr(clause)) == TYPE_PAIR)
+    unless(type(clause) == TYPE_PAIR &&
+           type(cdr(clause)) == TYPE_PAIR)
       error("%s: illegal clause syntax", coperator(operator)->name);
     if(car(clause) == obj_else) {
       unless(cdr(operands) == obj_empty)
@@ -1481,7 +1481,7 @@ static obj_t entry_and(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   if (operands == obj_empty)
     return obj_true;
   do {
-    if (TYPE(operands) != TYPE_PAIR)
+    if (type(operands) != TYPE_PAIR)
       error("%s: illegal syntax", coperator(operator)->name);
     if (cdr(operands) == obj_empty)
       return eval_tail(env, op_env, car(operands));
@@ -1500,7 +1500,7 @@ static obj_t entry_or(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   if (operands == obj_empty)
     return obj_false;
   do {
-    if (TYPE(operands) != TYPE_PAIR)
+    if (type(operands) != TYPE_PAIR)
       error("%s: illegal syntax", coperator(operator)->name);
     if (cdr(operands) == obj_empty)
       return eval_tail(env, op_env, car(operands));
@@ -1517,16 +1517,16 @@ static obj_t entry_or(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static obj_t entry_let(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t inner_env, bindings;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
   inner_env = make_pair(obj_empty, env);        /* TODO: common with interpret */
   bindings = car(operands);
-  while(TYPE(bindings) == TYPE_PAIR) {
+  while(type(bindings) == TYPE_PAIR) {
     obj_t binding = car(bindings);
-    unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(car(binding)) == TYPE_SYMBOL &&
-           TYPE(cdr(binding)) == TYPE_PAIR &&
+    unless(type(binding) == TYPE_PAIR &&
+           type(car(binding)) == TYPE_SYMBOL &&
+           type(cdr(binding)) == TYPE_PAIR &&
            cddr(binding) == obj_empty)
       error("%s: illegal binding", coperator(operator)->name);
     define(inner_env, car(binding), eval(env, op_env, cadr(binding)));
@@ -1544,16 +1544,16 @@ static obj_t entry_let(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static obj_t entry_let_star(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t inner_env, bindings;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
   inner_env = make_pair(obj_empty, env);        /* TODO: common with interpret */
   bindings = car(operands);
-  while(TYPE(bindings) == TYPE_PAIR) {
+  while(type(bindings) == TYPE_PAIR) {
     obj_t binding = car(bindings);
-    unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(car(binding)) == TYPE_SYMBOL &&
-           TYPE(cdr(binding)) == TYPE_PAIR &&
+    unless(type(binding) == TYPE_PAIR &&
+           type(car(binding)) == TYPE_SYMBOL &&
+           type(cdr(binding)) == TYPE_PAIR &&
            cddr(binding) == obj_empty)
       error("%s: illegal binding", coperator(operator)->name);
     define(inner_env, car(binding), eval(inner_env, op_env, cadr(binding)));
@@ -1571,16 +1571,16 @@ static obj_t entry_let_star(obj_t env, obj_t op_env, obj_t operator, obj_t opera
 static obj_t entry_letrec(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t inner_env, bindings;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
   inner_env = make_pair(obj_empty, env);        /* TODO: common with interpret */
   bindings = car(operands);
-  while(TYPE(bindings) == TYPE_PAIR) {
+  while(type(bindings) == TYPE_PAIR) {
     obj_t binding = car(bindings);
-    unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(car(binding)) == TYPE_SYMBOL &&
-           TYPE(cdr(binding)) == TYPE_PAIR &&
+    unless(type(binding) == TYPE_PAIR &&
+           type(car(binding)) == TYPE_SYMBOL &&
+           type(cdr(binding)) == TYPE_PAIR &&
            cddr(binding) == obj_empty)
       error("%s: illegal binding", coperator(operator)->name);
     define(inner_env, car(binding), obj_undefined);
@@ -1589,7 +1589,7 @@ static obj_t entry_letrec(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   if(bindings != obj_empty)
     error("%s: illegal bindings list", coperator(operator)->name);
   bindings = car(operands);
-  while(TYPE(bindings) == TYPE_PAIR) {
+  while(type(bindings) == TYPE_PAIR) {
     obj_t binding = car(bindings);
     define(inner_env, car(binding), eval(inner_env, op_env, cadr(binding)));
     bindings = cdr(bindings);
@@ -1608,9 +1608,9 @@ static obj_t entry_letrec(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t inner_env, next_env, bindings;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR &&
-         TYPE(cadr(operands)) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR &&
+         type(cadr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
   inner_env = make_pair(obj_empty, env);
 
@@ -1620,13 +1620,13 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
      are stored in the bindings of the <variable>s, and then the
      iteration phase begins. */
   bindings = car(operands);
-  while(TYPE(bindings) == TYPE_PAIR) {
+  while(type(bindings) == TYPE_PAIR) {
     obj_t binding = car(bindings);
-    unless(TYPE(binding) == TYPE_PAIR &&
-           TYPE(car(binding)) == TYPE_SYMBOL &&
-           TYPE(cdr(binding)) == TYPE_PAIR &&
+    unless(type(binding) == TYPE_PAIR &&
+           type(car(binding)) == TYPE_SYMBOL &&
+           type(cdr(binding)) == TYPE_PAIR &&
            (cddr(binding) == obj_empty ||
-            (TYPE(cddr(binding)) == TYPE_PAIR &&
+            (type(cddr(binding)) == TYPE_PAIR &&
              cdddr(binding) == obj_empty)))
       error("%s: illegal binding", coperator(operator)->name);
     define(inner_env, car(binding), eval(env, op_env, cadr(binding)));
@@ -1640,7 +1640,7 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
          Booleans), then the <command> expressions are evaluated in
          order for effect, */
       obj_t commands = cddr(operands);
-      while(TYPE(commands) == TYPE_PAIR) {
+      while(type(commands) == TYPE_PAIR) {
         eval(inner_env, op_env, car(commands));
         commands = cdr(commands);
       }
@@ -1653,7 +1653,7 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
          <variable>s, and the next iteration begins. */
       bindings = car(operands);
       next_env = make_pair(obj_empty, inner_env);
-      while(TYPE(bindings) == TYPE_PAIR) {
+      while(type(bindings) == TYPE_PAIR) {
         obj_t binding = car(bindings);
         unless(cddr(binding) == obj_empty)
           define(next_env, car(binding), eval(inner_env, op_env, caddr(binding)));
@@ -1668,7 +1668,7 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
          expression is unspecified. */
       obj_t result = obj_undefined;
       test = cdr(test);
-      while(TYPE(test) == TYPE_PAIR) {
+      while(type(test) == TYPE_PAIR) {
         result = eval(inner_env, op_env, car(test));
         test = cdr(test);
       }
@@ -1684,7 +1684,7 @@ static obj_t entry_do(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 
 static obj_t entry_delay(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
-  unless(TYPE(operands) == TYPE_PAIR &&
+  unless(type(operands) == TYPE_PAIR &&
          cdr(operands) == obj_empty)
     error("%s: illegal syntax", coperator(operator)->name);
   return make_promise(make_operator("anonymous promise",
@@ -1696,14 +1696,14 @@ static obj_t entry_delay(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 static obj_t quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t arg)
 {
   obj_t result = obj_empty, end = NULL, insert;
-  unless(TYPE(arg) == TYPE_PAIR)
+  unless(type(arg) == TYPE_PAIR)
     return arg;
-  while(TYPE(arg) == TYPE_PAIR) {
-    if(TYPE(car(arg)) == TYPE_PAIR &&
-       TYPE(caar(arg)) == TYPE_SYMBOL &&
+  while(type(arg) == TYPE_PAIR) {
+    if(type(car(arg)) == TYPE_PAIR &&
+       type(caar(arg)) == TYPE_SYMBOL &&
        (caar(arg) == obj_unquote ||
         caar(arg) == obj_unquote_splic)) {
-      unless(TYPE(cdar(arg)) == TYPE_PAIR &&
+      unless(type(cdar(arg)) == TYPE_PAIR &&
              cddar(arg) == obj_empty)
         error("%s: illegal %s syntax", coperator(operator)->name,
               csymbol(caar(arg))->string);
@@ -1716,7 +1716,7 @@ static obj_t quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t arg)
           set_cdr(end, pair);
         end = pair;
       } else if(caar(arg) == obj_unquote_splic) {
-        while(TYPE(insert) == TYPE_PAIR) {
+        while(type(insert) == TYPE_PAIR) {
           obj_t pair = make_pair(car(insert), obj_empty);
           if(result == obj_empty)
             result = pair;
@@ -1747,7 +1747,7 @@ static obj_t quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t arg)
 
 static obj_t entry_quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
-  unless(TYPE(operands) == TYPE_PAIR &&
+  unless(type(operands) == TYPE_PAIR &&
          cdr(operands) == obj_empty)
     error("%s: illegal syntax", coperator(operator)->name);
   return quasiquote(env, op_env, operator, car(operands));
@@ -1763,11 +1763,11 @@ static obj_t entry_quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 static obj_t entry_set(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t symbol, binding, value;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR &&
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR &&
          cddr(operands) == obj_empty)
     error("%s: illegal syntax", coperator(operator)->name);
-  unless(TYPE(car(operands)) == TYPE_SYMBOL)
+  unless(type(car(operands)) == TYPE_SYMBOL)
     error("%s: applied to non-symbol", coperator(operator)->name);
   symbol = car(operands);
   binding = lookup(env, symbol);
@@ -1802,14 +1802,14 @@ static obj_t entry_set(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static obj_t entry_lambda(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t list;
-  unless(TYPE(operands) == TYPE_PAIR &&
-         TYPE(cdr(operands)) == TYPE_PAIR)
+  unless(type(operands) == TYPE_PAIR &&
+         type(cdr(operands)) == TYPE_PAIR)
     error("%s: illegal syntax", coperator(operator)->name);
   /* check syntax of argument list to save time in apply */
   list = car(operands);
-  while(list != obj_empty && TYPE(list) != TYPE_SYMBOL) {
-    unless(TYPE(list) == TYPE_PAIR &&
-           TYPE(car(list)) == TYPE_SYMBOL)
+  while(list != obj_empty && type(list) != TYPE_SYMBOL) {
+    unless(type(list) == TYPE_PAIR &&
+           type(car(list)) == TYPE_SYMBOL)
       error("%s: illegal argument list", coperator(operator)->name);
     list = cdr(list);
   }
@@ -1888,9 +1888,9 @@ static obj_t entry_eqp(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 static bool equalp(obj_t obj1, obj_t obj2)
 {
   size_t i;
-  if(TYPE(obj1) != TYPE(obj2))
+  if(type(obj1) != type(obj2))
     return false;
-  switch(TYPE(obj1)) {
+  switch(type(obj1)) {
   case TYPE_PAIR:
     return equalp(car(obj1), car(obj2)) && equalp(cdr(obj1), cdr(obj2));
   case TYPE_VECTOR:
@@ -1933,7 +1933,7 @@ static obj_t entry_pairp(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_PAIR);
+  return make_bool(type(arg) == TYPE_PAIR);
 }
 
 
@@ -1960,7 +1960,7 @@ static obj_t entry_car(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t pair;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &pair);
-  unless(TYPE(pair) == TYPE_PAIR)
+  unless(type(pair) == TYPE_PAIR)
     error("%s: argument must be a pair", coperator(operator)->name);
   return car(pair);
 }
@@ -1974,7 +1974,7 @@ static obj_t entry_cdr(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t pair;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &pair);
-  unless(TYPE(pair) == TYPE_PAIR)
+  unless(type(pair) == TYPE_PAIR)
     error("%s: argument must be a pair", coperator(operator)->name);
   return cdr(pair);
 }
@@ -1989,7 +1989,7 @@ static obj_t entry_setcar(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 {
   obj_t pair, value;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &pair, &value);
-  unless(TYPE(pair) == TYPE_PAIR)
+  unless(type(pair) == TYPE_PAIR)
     error("%s: first argument must be a pair", coperator(operator)->name);
   set_car(pair, value);
   return obj_undefined;
@@ -2005,7 +2005,7 @@ static obj_t entry_setcdr(obj_t env, obj_t op_env, obj_t operator, obj_t operand
 {
   obj_t pair, value;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &pair, &value);
-  unless(TYPE(pair) == TYPE_PAIR)
+  unless(type(pair) == TYPE_PAIR)
     error("%s: first argument must be a pair", coperator(operator)->name);
   set_cdr(pair, value);
   return obj_undefined;
@@ -2033,7 +2033,7 @@ static obj_t entry_listp(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  while(TYPE(arg) == TYPE_PAIR)
+  while(type(arg) == TYPE_PAIR)
     arg = cdr(arg);
   return make_bool(arg == obj_empty);
 }
@@ -2061,7 +2061,7 @@ static obj_t entry_length(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   intptr_t length;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   length = 0;
-  while(TYPE(arg) == TYPE_PAIR) {
+  while(type(arg) == TYPE_PAIR) {
     ++length;
     arg = cdr(arg);
   }
@@ -2082,7 +2082,7 @@ static obj_t entry_append(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg1, &arg2);
   result = obj_empty;
   end = NULL;                   /* suppress "uninitialized" warning in GCC */
-  while(TYPE(arg1) == TYPE_PAIR) {
+  while(type(arg1) == TYPE_PAIR) {
     pair = make_pair(car(arg1), obj_empty);
     if(result == obj_empty)
       result = pair;
@@ -2110,7 +2110,7 @@ static obj_t entry_integerp(obj_t env, obj_t op_env, obj_t operator, obj_t opera
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_INTEGER);
+  return make_bool(type(arg) == TYPE_INTEGER);
 }
 
 
@@ -2125,7 +2125,7 @@ static obj_t entry_zerop(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: argument must be an integer", coperator(operator)->name);
   return make_bool(cinteger(arg)->integer == 0);
 }
@@ -2135,7 +2135,7 @@ static obj_t entry_positivep(obj_t env, obj_t op_env, obj_t operator, obj_t oper
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: argument must be an integer", coperator(operator)->name);
   return make_bool(cinteger(arg)->integer > 0);
 }
@@ -2145,7 +2145,7 @@ static obj_t entry_negativep(obj_t env, obj_t op_env, obj_t operator, obj_t oper
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: argument must be an integer", coperator(operator)->name);
   return make_bool(cinteger(arg)->integer < 0);
 }
@@ -2159,7 +2159,7 @@ static obj_t entry_symbolp(obj_t env, obj_t op_env, obj_t operator, obj_t operan
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_SYMBOL);
+  return make_bool(type(arg) == TYPE_SYMBOL);
 }
 
 
@@ -2171,7 +2171,7 @@ static obj_t entry_procedurep(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_OPERATOR);
+  return make_bool(type(arg) == TYPE_OPERATOR);
 }
 
 
@@ -2184,12 +2184,12 @@ static obj_t entry_apply(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t proc, args, qargs = obj_empty, end = NULL, quote;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &proc, &args);
-  unless(TYPE(proc) == TYPE_OPERATOR)
+  unless(type(proc) == TYPE_OPERATOR)
     error("%s: first argument must be a procedure", coperator(operator)->name);
   quote = make_operator("quote", entry_quote, obj_empty, obj_empty, obj_empty, obj_empty);
   while(args != obj_empty) {
     obj_t a;
-    assert(TYPE(args) == TYPE_PAIR);
+    assert(type(args) == TYPE_PAIR);
     a = make_pair(make_pair(quote, make_pair(car(args), obj_empty)), obj_empty);
     if(end != NULL)
       set_cdr(end, a);
@@ -2212,8 +2212,8 @@ static obj_t entry_add(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 0);
   result = 0;
-  while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(car(args)) == TYPE_INTEGER)
+  while(type(args) == TYPE_PAIR) {
+    unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
     result += cinteger(car(args))->integer;
     args = cdr(args);
@@ -2233,8 +2233,8 @@ static obj_t entry_multiply(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 0);
   result = 1;
-  while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(car(args)) == TYPE_INTEGER)
+  while(type(args) == TYPE_PAIR) {
+    unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
     result *= cinteger(car(args))->integer;
     args = cdr(args);
@@ -2257,14 +2257,14 @@ static obj_t entry_subtract(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   obj_t arg, args;
   intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   result = cinteger(arg)->integer;
   if(args == obj_empty)
     result = -result;
   else {
-    while(TYPE(args) == TYPE_PAIR) {
-      unless(TYPE(car(args)) == TYPE_INTEGER)
+    while(type(args) == TYPE_PAIR) {
+      unless(type(car(args)) == TYPE_INTEGER)
         error("%s: arguments must be integers", coperator(operator)->name);
       result -= cinteger(car(args))->integer;
       args = cdr(args);
@@ -2288,7 +2288,7 @@ static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   obj_t arg, args;
   intptr_t result;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   result = cinteger(arg)->integer;
   if(args == obj_empty) {
@@ -2296,8 +2296,8 @@ static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operand
       error("%s: reciprocal of zero", coperator(operator)->name);
     result = 1/result;  /* TODO: pretty meaningless for integers */
   } else {
-    while(TYPE(args) == TYPE_PAIR) {
-      unless(TYPE(car(args)) == TYPE_INTEGER)
+    while(type(args) == TYPE_PAIR) {
+      unless(type(car(args)) == TYPE_INTEGER)
         error("%s: arguments must be integers", coperator(operator)->name);
       if(cinteger(car(args))->integer == 0)
         error("%s: divide by zero", coperator(operator)->name);
@@ -2320,11 +2320,11 @@ static obj_t entry_lessthan(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   obj_t arg, args;
   intptr_t last;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   last = cinteger(arg)->integer;
-  while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(car(args)) == TYPE_INTEGER)
+  while(type(args) == TYPE_PAIR) {
+    unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
     if (last >= cinteger(car(args))->integer)
       return obj_false;
@@ -2346,11 +2346,11 @@ static obj_t entry_greaterthan(obj_t env, obj_t op_env, obj_t operator, obj_t op
   obj_t arg, args;
   intptr_t last;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   last = cinteger(arg)->integer;
-  while(TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(car(args)) == TYPE_INTEGER)
+  while(type(args) == TYPE_PAIR) {
+    unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
     if (last <= cinteger(car(args))->integer)
       return obj_false;
@@ -2373,7 +2373,7 @@ static obj_t entry_reverse(obj_t env, obj_t op_env, obj_t operator, obj_t operan
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   result = obj_empty;
   while(arg != obj_empty) {
-    unless(TYPE(arg) == TYPE_PAIR)
+    unless(type(arg) == TYPE_PAIR)
       error("%s: argument must be a list", coperator(operator)->name);
     result = make_pair(car(arg), result);
     arg = cdr(arg);
@@ -2391,13 +2391,13 @@ static obj_t entry_list_tail(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   obj_t arg, k;
   int i;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg, &k);
-  unless(TYPE(k) == TYPE_INTEGER)
+  unless(type(k) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
   i = cinteger(k)->integer;
   unless(i >= 0)
     error("%s: second argument must be non-negative", coperator(operator)->name);
   while(i-- > 0) {
-    unless(TYPE(arg) == TYPE_PAIR)
+    unless(type(arg) == TYPE_PAIR)
       error("%s: first argument must be a list", coperator(operator)->name);
     arg = cdr(arg);
   }
@@ -2414,7 +2414,7 @@ static obj_t entry_list_ref(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   obj_t arg, k, result;
   int i;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg, &k);
-  unless(TYPE(k) == TYPE_INTEGER)
+  unless(type(k) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
   i = cinteger(k)->integer;
   unless(i >= 0)
@@ -2422,7 +2422,7 @@ static obj_t entry_list_ref(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   do {
     if(arg == obj_empty)
       error("%s: index %ld out of bounds", coperator(operator)->name, cinteger(k)->integer);
-    unless(TYPE(arg) == TYPE_PAIR)
+    unless(type(arg) == TYPE_PAIR)
       error("%s: first argument must be a list", coperator(operator)->name);
     result = car(arg);
     arg = cdr(arg);
@@ -2449,7 +2449,7 @@ static obj_t entry_open_input_file(obj_t env, obj_t op_env, obj_t operator, obj_
   obj_t filename;
   FILE *stream;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &filename);
-  unless(TYPE(filename) == TYPE_STRING)
+  unless(type(filename) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   stream = fopen(cstring(filename)->string, "r");
   if(stream == NULL)
@@ -2470,7 +2470,7 @@ static obj_t entry_open_output_file(obj_t env, obj_t op_env, obj_t operator, obj
   obj_t filename;
   FILE *stream;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &filename);
-  unless(TYPE(filename) == TYPE_STRING)
+  unless(type(filename) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   stream = fopen(cstring(filename)->string, "w");
   if(stream == NULL)
@@ -2491,7 +2491,7 @@ static obj_t entry_close_port(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 {
   obj_t port;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &port);
-  unless(TYPE(port) == TYPE_PORT)
+  unless(type(port) == TYPE_PORT)
     error("%s: argument must be a port", coperator(operator)->name);
   if(cport(port)->stream != NULL) {
     fclose(cport(port)->stream);
@@ -2506,7 +2506,7 @@ static FILE *rest_port_stream(obj_t operator, obj_t rest, const char *argnumber,
   unless(rest == obj_empty) {
     unless(cdr(rest) == obj_empty)
       error("%s: too many arguments", coperator(operator)->name);
-    unless(TYPE(car(rest)) == TYPE_PORT)
+    unless(type(car(rest)) == TYPE_PORT)
       error("%s: %s argument must be a port", coperator(operator)->name, argnumber);
     stream = cport(car(rest))->stream;
     unless(stream)
@@ -2540,7 +2540,7 @@ static obj_t entry_write_string(obj_t env, obj_t op_env, obj_t operator, obj_t o
 {
   obj_t arg, rest;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 1, &arg);
-  unless(TYPE(arg) == TYPE_STRING)
+  unless(type(arg) == TYPE_STRING)
     error("%s: first argument must be a string", coperator(operator)->name);
   /* TODO: default to current-output-port */
   fputs(cstring(arg)->string, rest_port_stream(operator, rest, "second", stdout));
@@ -2579,7 +2579,7 @@ static obj_t entry_load(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
 {
   obj_t filename;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &filename);
-  unless(TYPE(filename) == TYPE_STRING)
+  unless(type(filename) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   return load(env, op_env, cstring(filename)->string);
 }
@@ -2598,12 +2598,12 @@ static obj_t entry_force(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t promise;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &promise);
-  unless(TYPE(promise) == TYPE_PROMISE)
+  unless(type(promise) == TYPE_PROMISE)
     error("%s: argument must be a promise", coperator(operator)->name);
   /* If the promise is unevaluated then apply the CDR. */
   if (!cpromise(promise)->fulfilledp) {
     obj_t closure = cpromise(promise)->fulfiller;
-    assert(TYPE(closure) == TYPE_OPERATOR);
+    assert(type(closure) == TYPE_OPERATOR);
     assert(coperator(closure)->arguments == obj_empty);
     obj_t value = (*coperator(closure)->entry)(env, op_env, closure, obj_empty);
     gc_write_barrier(gc_ref_from_heap_object(promise), sizeof(promise_s),
@@ -2624,7 +2624,7 @@ static obj_t entry_charp(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_CHARACTER);
+  return make_bool(type(arg) == TYPE_CHARACTER);
 }
 
 
@@ -2637,7 +2637,7 @@ static obj_t entry_char_to_integer(obj_t env, obj_t op_env, obj_t operator, obj_
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_CHARACTER)
+  unless(type(arg) == TYPE_CHARACTER)
     error("%s: first argument must be a character", coperator(operator)->name);
   return make_integer(ccharacter(arg)->c);
 }
@@ -2652,7 +2652,7 @@ static obj_t entry_integer_to_char(obj_t env, obj_t op_env, obj_t operator, obj_
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_INTEGER)
+  unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   unless(0 <= cinteger(arg)->integer)
     error("%s: first argument is out of range", coperator(operator)->name);
@@ -2668,7 +2668,7 @@ static obj_t entry_vectorp(obj_t env, obj_t op_env, obj_t operator, obj_t operan
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_VECTOR);
+  return make_bool(type(arg) == TYPE_VECTOR);
 }
 
 
@@ -2683,7 +2683,7 @@ static obj_t entry_make_vector(obj_t env, obj_t op_env, obj_t operator, obj_t op
 {
   obj_t length, rest, fill = obj_undefined;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 1, &length);
-  unless(TYPE(length) == TYPE_INTEGER)
+  unless(type(length) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   unless(rest == obj_empty) {
     unless(cdr(rest) == obj_empty)
@@ -2717,7 +2717,7 @@ static obj_t entry_vector_length(obj_t env, obj_t op_env, obj_t operator, obj_t 
 {
   obj_t vector;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &vector);
-  unless(TYPE(vector) == TYPE_VECTOR)
+  unless(type(vector) == TYPE_VECTOR)
     error("%s: argument must be a vector", coperator(operator)->name);
   return make_integer(cvector(vector)->length);
 }
@@ -2732,9 +2732,9 @@ static obj_t entry_vector_ref(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 {
   obj_t vector, index;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &vector, &index);
-  unless(TYPE(vector) == TYPE_VECTOR)
+  unless(type(vector) == TYPE_VECTOR)
     error("%s: first argument must be a vector", coperator(operator)->name);
-  unless(TYPE(index) == TYPE_INTEGER)
+  unless(type(index) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
   unless(0 <= cinteger(index)->integer && cinteger(index)->integer < cvector(vector)->length)
     error("%s: index %ld out of bounds of vector length %ld",
@@ -2753,9 +2753,9 @@ static obj_t entry_vector_set(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 {
   obj_t vector, index, obj;
   eval_args(coperator(operator)->name, env, op_env, operands, 3, &vector, &index, &obj);
-  unless(TYPE(vector) == TYPE_VECTOR)
+  unless(type(vector) == TYPE_VECTOR)
     error("%s: first argument must be a vector", coperator(operator)->name);
-  unless(TYPE(index) == TYPE_INTEGER)
+  unless(type(index) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
   unless(0 <= cinteger(index)->integer && cinteger(index)->integer < cvector(vector)->length)
     error("%s: index %ld out of bounds of vector length %ld",
@@ -2775,7 +2775,7 @@ static obj_t entry_vector_to_list(obj_t env, obj_t op_env, obj_t operator, obj_t
   obj_t vector, list;
   size_t i;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &vector);
-  unless(TYPE(vector) == TYPE_VECTOR)
+  unless(type(vector) == TYPE_VECTOR)
     error("%s: argument must be a vector", coperator(operator)->name);
   list = obj_empty;
   i = cvector(vector)->length;
@@ -2813,7 +2813,7 @@ static obj_t entry_vector_fill(obj_t env, obj_t op_env, obj_t operator, obj_t op
   obj_t vector, obj;
   size_t i;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &vector, &obj);
-  unless(TYPE(vector) == TYPE_VECTOR)
+  unless(type(vector) == TYPE_VECTOR)
     error("%s: first argument must be a vector", coperator(operator)->name);
   for(i = 0; i < cvector(vector)->length; ++i)
     vset(vector, i, obj);
@@ -2833,7 +2833,7 @@ static obj_t entry_error(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t msg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &msg);
-  unless(TYPE(msg) == TYPE_STRING)
+  unless(type(msg) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   error(cstring(msg)->string);
   return obj_undefined;
@@ -2848,7 +2848,7 @@ static obj_t entry_symbol_to_string(obj_t env, obj_t op_env, obj_t operator, obj
 {
   obj_t symbol;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &symbol);
-  unless(TYPE(symbol) == TYPE_SYMBOL)
+  unless(type(symbol) == TYPE_SYMBOL)
     error("%s: argument must be a symbol", coperator(operator)->name);
   return make_string(csymbol(symbol)->length, csymbol(symbol)->string);
 }
@@ -2862,7 +2862,7 @@ static obj_t entry_string_to_symbol(obj_t env, obj_t op_env, obj_t operator, obj
 {
   obj_t string;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &string);
-  unless(TYPE(string) == TYPE_STRING)
+  unless(type(string) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   /* TODO: Should pass length to intern to avoid problems with NUL termination. */
   return intern(cstring(string)->string);
@@ -2877,7 +2877,7 @@ static obj_t entry_stringp(obj_t env, obj_t op_env, obj_t operator, obj_t operan
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_STRING);
+  return make_bool(type(arg) == TYPE_STRING);
 }
 
 
@@ -2894,12 +2894,12 @@ static obj_t entry_make_string(obj_t env, obj_t op_env, obj_t operator, obj_t op
   char c = '\0';
   int i;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &k);
-  unless(TYPE(k) == TYPE_INTEGER)
+  unless(type(k) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
   unless(cinteger(k)->integer >= 0)
     error("%s: first argument must be non-negative", coperator(operator)->name);
-  if (TYPE(args) == TYPE_PAIR) {
-    unless(TYPE(car(args)) == TYPE_CHARACTER)
+  if (type(args) == TYPE_PAIR) {
+    unless(type(car(args)) == TYPE_CHARACTER)
       error("%s: second argument must be a character", coperator(operator)->name);
     unless(cdr(args) == obj_empty)
       error("%s: too many arguments", coperator(operator)->name);
@@ -2924,8 +2924,8 @@ static obj_t entry_string(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 0);
   o = args;
   length = 0;
-  while(TYPE(o) == TYPE_PAIR) {
-    unless(TYPE(car(o)) == TYPE_CHARACTER)
+  while(type(o) == TYPE_PAIR) {
+    unless(type(car(o)) == TYPE_CHARACTER)
       error("%s: arguments must be strings", coperator(operator)->name);
     ++ length;
     o = cdr(o);
@@ -2933,8 +2933,8 @@ static obj_t entry_string(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   obj = make_string(length, NULL);
   o = args;
   length = 0;
-  while(TYPE(o) == TYPE_PAIR) {
-    assert(TYPE(car(o)) == TYPE_CHARACTER);
+  while(type(o) == TYPE_PAIR) {
+    assert(type(car(o)) == TYPE_CHARACTER);
     cstring(obj)->string[length] = ccharacter(car(o))->c;
     ++ length;
     o = cdr(o);
@@ -2952,7 +2952,7 @@ static obj_t entry_string_length(obj_t env, obj_t op_env, obj_t operator, obj_t 
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_STRING)
+  unless(type(arg) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   return make_integer(cstring(arg)->length);
 }
@@ -2967,9 +2967,9 @@ static obj_t entry_string_ref(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 {
   obj_t arg, k;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg, &k);
-  unless(TYPE(arg) == TYPE_STRING)
+  unless(type(arg) == TYPE_STRING)
     error("%s: first argument must be a string", coperator(operator)->name);
-  unless(TYPE(k) == TYPE_INTEGER)
+  unless(type(k) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
   unless(0 <= cinteger(k)->integer && cinteger(k)->integer < cstring(arg)->length)
     error("%s: second argument is out of range", coperator(operator)->name);
@@ -2985,9 +2985,9 @@ static obj_t entry_string_equalp(obj_t env, obj_t op_env, obj_t operator, obj_t 
 {
   obj_t arg1, arg2;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg1, &arg2);
-  unless(TYPE(arg1) == TYPE_STRING)
+  unless(type(arg1) == TYPE_STRING)
     error("%s: first argument must be a string", coperator(operator)->name);
-  unless(TYPE(arg2) == TYPE_STRING)
+  unless(type(arg2) == TYPE_STRING)
     error("%s: second argument must be a string", coperator(operator)->name);
   return make_bool(string_equalp(arg1, arg2));
 }
@@ -3007,11 +3007,11 @@ static obj_t entry_substring(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   obj_t obj, arg, start, end;
   size_t length;
   eval_args(coperator(operator)->name, env, op_env, operands, 3, &arg, &start, &end);
-  unless(TYPE(arg) == TYPE_STRING)
+  unless(type(arg) == TYPE_STRING)
     error("%s: first argument must be a string", coperator(operator)->name);
-  unless(TYPE(start) == TYPE_INTEGER)
+  unless(type(start) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
-  unless(TYPE(end) == TYPE_INTEGER)
+  unless(type(end) == TYPE_INTEGER)
     error("%s: third argument must be an integer", coperator(operator)->name);
   unless(0 <= cinteger(start)->integer
          && cinteger(start)->integer <= cinteger(end)->integer
@@ -3035,8 +3035,8 @@ static obj_t entry_string_append(obj_t env, obj_t op_env, obj_t operator, obj_t 
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 0);
   o = args;
   length = 0;
-  while(TYPE(o) == TYPE_PAIR) {
-    unless(TYPE(car(o)) == TYPE_STRING)
+  while(type(o) == TYPE_PAIR) {
+    unless(type(car(o)) == TYPE_STRING)
       error("%s: arguments must be strings", coperator(operator)->name);
     length += cstring(car(o))->length;
     o = cdr(o);
@@ -3044,9 +3044,9 @@ static obj_t entry_string_append(obj_t env, obj_t op_env, obj_t operator, obj_t 
   obj = make_string(length, NULL);
   o = args;
   length = 0;
-  while(TYPE(o) == TYPE_PAIR) {
+  while(type(o) == TYPE_PAIR) {
     string_s *s = cstring(car(o));
-    assert(TYPE(car(o)) == TYPE_STRING);
+    assert(type(car(o)) == TYPE_STRING);
     memcpy(cstring(obj)->string + length, s->string, s->length + 1);
     length += s->length;
     o = cdr(o);
@@ -3066,7 +3066,7 @@ static obj_t entry_string_to_list(obj_t env, obj_t op_env, obj_t operator, obj_t
   obj_t string, list;
   size_t i;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &string);
-  unless(TYPE(string) == TYPE_STRING)
+  unless(type(string) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   list = obj_empty;
   i = cstring(string)->length;
@@ -3091,9 +3091,9 @@ static obj_t entry_list_to_string(obj_t env, obj_t op_env, obj_t operator, obj_t
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &list);
   l = list;
   while(l != obj_empty) {
-    unless(TYPE(l) == TYPE_PAIR)
+    unless(type(l) == TYPE_PAIR)
       error("%s: argument must be a list", coperator(operator)->name);
-    unless(TYPE(car(l)) == TYPE_CHARACTER)
+    unless(type(car(l)) == TYPE_CHARACTER)
       error("%s: argument must be a list of characters", coperator(operator)->name);
     ++ length;
     l = cdr(l);
@@ -3101,8 +3101,8 @@ static obj_t entry_list_to_string(obj_t env, obj_t op_env, obj_t operator, obj_t
   string = make_string(length, NULL);
   l = list;
   for(i = 0; i < length; ++i) {
-    assert(TYPE(l) == TYPE_PAIR);
-    assert(TYPE(car(l)) == TYPE_CHARACTER);
+    assert(type(l) == TYPE_PAIR);
+    assert(type(car(l)) == TYPE_CHARACTER);
     cstring(string)->string[i] = ccharacter(car(l))->c;
     l = cdr(l);
   }
@@ -3118,7 +3118,7 @@ static obj_t entry_string_copy(obj_t env, obj_t op_env, obj_t operator, obj_t op
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_STRING)
+  unless(type(arg) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   return make_string(cstring(arg)->length, cstring(arg)->string);
 }
@@ -3134,7 +3134,7 @@ static obj_t entry_string_hash(obj_t env, obj_t op_env, obj_t operator, obj_t op
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_STRING)
+  unless(type(arg) == TYPE_STRING)
     error("%s: argument must be a string", coperator(operator)->name);
   return make_integer(string_hash(arg));
 }
@@ -3165,7 +3165,7 @@ static obj_t make_hashtable(obj_t operator, obj_t rest, hash_t hashf, cmp_t cmpf
     error("%s: too many arguments", coperator(operator)->name);
   else {
     obj_t arg = car(rest);
-    unless(TYPE(arg) == TYPE_INTEGER)
+    unless(type(arg) == TYPE_INTEGER)
       error("%s: first argument must be an integer", coperator(operator)->name);
     unless(cinteger(arg)->integer > 0)
       error("%s: first argument must be positive", coperator(operator)->name);
@@ -3224,9 +3224,9 @@ static obj_t entry_make_hashtable(obj_t env, obj_t op_env, obj_t operator, obj_t
 {
   obj_t hashf, cmpf, rest;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 2, &hashf, &cmpf);
-  unless(TYPE(hashf) == TYPE_OPERATOR)
+  unless(type(hashf) == TYPE_OPERATOR)
     error("%s: first argument must be a procedure", coperator(operator)->name);
-  unless(TYPE(cmpf) == TYPE_OPERATOR)
+  unless(type(cmpf) == TYPE_OPERATOR)
     error("%s: first argument must be a procedure", coperator(operator)->name);
   if (coperator(hashf)->entry == entry_eq_hash
       && coperator(cmpf)->entry == entry_eqp)
@@ -3250,7 +3250,7 @@ static obj_t entry_hashtablep(obj_t env, obj_t op_env, obj_t operator, obj_t ope
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  return make_bool(TYPE(arg) == TYPE_TABLE);
+  return make_bool(type(arg) == TYPE_TABLE);
 }
 
 /* (hashtable-size hashtable)
@@ -3262,7 +3262,7 @@ static obj_t entry_hashtable_size(obj_t env, obj_t op_env, obj_t operator, obj_t
 {
   obj_t arg;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
-  unless(TYPE(arg) == TYPE_TABLE)
+  unless(type(arg) == TYPE_TABLE)
     error("%s: argument must be a hash table", coperator(operator)->name);
   return make_integer(table_size(arg));
 }
@@ -3277,7 +3277,7 @@ static obj_t entry_hashtable_ref(obj_t env, obj_t op_env, obj_t operator, obj_t 
 {
   obj_t tbl, key, def, value;
   eval_args(coperator(operator)->name, env, op_env, operands, 3, &tbl, &key, &def);
-  unless(TYPE(tbl) == TYPE_TABLE)
+  unless(type(tbl) == TYPE_TABLE)
     error("%s: first argument must be a hash table", coperator(operator)->name);
   value = table_ref(tbl, key);
   if (value) return value;
@@ -3295,7 +3295,7 @@ static obj_t entry_hashtable_set(obj_t env, obj_t op_env, obj_t operator, obj_t 
 {
   obj_t tbl, key, value;
   eval_args(coperator(operator)->name, env, op_env, operands, 3, &tbl, &key, &value);
-  unless(TYPE(tbl) == TYPE_TABLE)
+  unless(type(tbl) == TYPE_TABLE)
     error("%s: first argument must be a hash table", coperator(operator)->name);
   table_set(tbl, key, value);
   return obj_undefined;
@@ -3311,7 +3311,7 @@ static obj_t entry_hashtable_delete(obj_t env, obj_t op_env, obj_t operator, obj
 {
   obj_t tbl, key;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &tbl, &key);
-  unless(TYPE(tbl) == TYPE_TABLE)
+  unless(type(tbl) == TYPE_TABLE)
     error("%s: first argument must be a hash table", coperator(operator)->name);
   table_delete(tbl, key);
   return obj_undefined;
@@ -3326,7 +3326,7 @@ static obj_t entry_hashtable_containsp(obj_t env, obj_t op_env, obj_t operator, 
 {
   obj_t tbl, key;
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &tbl, &key);
-  unless(TYPE(tbl) == TYPE_TABLE)
+  unless(type(tbl) == TYPE_TABLE)
     error("%s: first argument must be a hash table", coperator(operator)->name);
   return make_bool(table_ref(tbl, key) != NULL);
 }
@@ -3342,7 +3342,7 @@ static obj_t entry_hashtable_keys(obj_t env, obj_t op_env, obj_t operator, obj_t
   size_t i, j = 0;
   obj_t tbl, vector;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &tbl);
-  unless(TYPE(tbl) == TYPE_TABLE)
+  unless(type(tbl) == TYPE_TABLE)
     error("%s: argument must be a hash table", coperator(operator)->name);
   vector = make_vector(table_size(tbl), obj_undefined);
   for(i = 0; i < cbuckets(ctable(tbl)->buckets)->length; ++i) {
@@ -3365,7 +3365,7 @@ static obj_t entry_make_weak_box(obj_t env, obj_t op_env, obj_t operator, obj_t 
 static obj_t entry_weak_box_value(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
   obj_t box, rest, defact = obj_false;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 1, &box);
-  unless(TYPE(box) == TYPE_WEAK_BOX)
+  unless(type(box) == TYPE_WEAK_BOX)
     error("%s: first argument must be a weak box", coperator(operator)->name);
   unless(rest == obj_empty) {
     unless(cdr(rest) == obj_empty)
@@ -3378,7 +3378,7 @@ static obj_t entry_weak_box_value(obj_t env, obj_t op_env, obj_t operator, obj_t
 static obj_t entry_weak_box_p(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
   obj_t box;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &box);
-  return TYPE(box) == TYPE_WEAK_BOX ? obj_true : obj_false;
+  return type(box) == TYPE_WEAK_BOX ? obj_true : obj_false;
 }
 
 /* ephemerons */
@@ -3392,7 +3392,7 @@ static obj_t entry_make_ephemeron(obj_t env, obj_t op_env, obj_t operator, obj_t
 static obj_t entry_ephemeron_value(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
   obj_t eph, rest, defact = obj_false, retain = obj_false;
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &rest, 1, &eph);
-  unless(TYPE(eph) == TYPE_EPHEMERON)
+  unless(type(eph) == TYPE_EPHEMERON)
     error("%s: first argument must be an ephemeron", coperator(operator)->name);
   unless(rest == obj_empty) {
     unless(cdr(rest) == obj_empty) {
@@ -3409,7 +3409,7 @@ static obj_t entry_ephemeron_value(obj_t env, obj_t op_env, obj_t operator, obj_
 static obj_t entry_ephemeronp(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
   obj_t eph;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &eph);
-  return TYPE(eph) == TYPE_EPHEMERON ? obj_true : obj_false;
+  return type(eph) == TYPE_EPHEMERON ? obj_true : obj_false;
 }
 
 /* (gc)
