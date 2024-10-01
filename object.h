@@ -168,7 +168,7 @@ FOR_EACH_HEAP_OBJECT_KIND(DEFCASTER)
 #undef DEFCASTER
 
 /* Sizing objects
- * These are used by the GC in gc-embed.h, but also by us.
+ * These are used by the GC in embed.h, but also by us.
  */
 
 #define DEFINE_SIZEOF(name)                             \
