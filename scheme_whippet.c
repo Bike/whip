@@ -23,6 +23,8 @@
 #include <stdbool.h> // bool
 #include <threads.h> // thread_local
 #include <stdnoreturn.h> // deprecated in C23, wah
+#include <unistd.h> // STDIN_FILENO
+#include <fcntl.h>
 #include <pthread.h>
 
 #include "object.h"
@@ -377,16 +379,29 @@ static inline obj_t ephemeron_value(obj_t eph, obj_t defact, obj_t keepalive) {
     return defact;
 }
 
+void* mgetc_aux(void* stream) {
+  return (void*)(intptr_t)fgetc((FILE*)stream);
+}
+
+/* mgetc -- like getc, but without breaking the GC
+ * when we block on I/O, or anything, we need to tell the GC
+ * that it can do collections without us, or else the whole
+ * system (all threads) will hang while we wait for I/O.
+ */
+static int mgetc(FILE *stream) {
+  return (int)(intptr_t)gc_call_without_gc(mutator, mgetc_aux, stream);
+}
+
 /* getnbc -- get next non-blank char from stream */
 
 static int getnbc(FILE *stream)
 {
   int c;
   do {
-    c = getc(stream);
+    c = mgetc(stream);
     if(c == ';') {
       do
-        c = getc(stream);
+        c = mgetc(stream);
       while(c != EOF && c != '\n');
     }
   } while(isspace(c));
@@ -855,7 +870,7 @@ static intptr_t read_integer(FILE *stream, int c)
 
   do {
     integer = integer*10 + c-'0';
-    c = getc(stream);
+    c = mgetc(stream);
   } while(isdigit(c));
   ungetc(c, stream);
 
@@ -870,7 +885,7 @@ static obj_t read_symbol(FILE *stream, int c)
 
   do {
     string[length++] = tolower(c);
-    c = getc(stream);
+    c = mgetc(stream);
   } while(length < SYMMAX && (isalnum(c) || isealpha(c)));
 
   if(isalnum(c) || isealpha(c))
@@ -3723,7 +3738,6 @@ int main(int argc, char *argv[])
   gc_heap_set_roots(heap, &global_roots);
   
   // Scheme
-  FILE *input = stdin;
   size_t i;
   volatile obj_t env, op_env, obj;
   jmp_buf jb;
@@ -3786,7 +3800,7 @@ int main(int argc, char *argv[])
       }
       printf("> ");
       fflush(stdout);
-      obj = read_(input);
+      obj = read_(stdin);
       if(obj == obj_eof) break;
       obj = eval(env, op_env, obj);
       if(obj != obj_undefined) {
