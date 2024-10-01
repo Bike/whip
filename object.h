@@ -168,6 +168,9 @@ static inline enum type_t type(obj_t obj) {
 FOR_EACH_HEAP_OBJECT_KIND(DEFCASTER)
 #undef DEFCASTER
 
+// Special case for fixnums.
+static inline intptr_t fixnum(obj_t o) { return cinteger(o)->integer; }
+
 /* Sizing objects
  * These are used by the GC in embed.h, but also by us.
  */

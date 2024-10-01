@@ -522,7 +522,7 @@ static size_t eqv_hash(obj_t obj)
 {
   switch(type(obj)) {
   case TYPE_INTEGER:
-    return cinteger(obj)->integer;
+    return fixnum(obj);
   case TYPE_CHARACTER:
     return ccharacter(obj)->c;
   default:
@@ -538,7 +538,7 @@ static bool eqvp(obj_t obj1, obj_t obj2)
     return false;
   switch(type(obj1)) {
   case TYPE_INTEGER:
-    return cinteger(obj1)->integer == cinteger(obj2)->integer;
+    return fixnum(obj1) == fixnum(obj2);
   case TYPE_CHARACTER:
     return ccharacter(obj1)->c == ccharacter(obj2)->c;
   default:
@@ -673,7 +673,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
 {
   switch(type(obj)) {
     case TYPE_INTEGER: {
-      fprintf(stream, "%ld", cinteger(obj)->integer);
+      fprintf(stream, "%ld", fixnum(obj));
     } break;
 
     case TYPE_SYMBOL: {
@@ -1041,7 +1041,7 @@ static obj_t read_(FILE *stream)
       if(isdigit(next)) {
         obj_t integer = read_integer(stream, next);
         if(c == '-')
-          cinteger(integer)->integer = -cinteger(integer)->integer;
+          cinteger(integer)->integer = -fixnum(integer);
         return integer;
       }
       ungetc(next, stream);
@@ -2127,7 +2127,7 @@ static obj_t entry_zerop(obj_t env, obj_t op_env, obj_t operator, obj_t operands
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: argument must be an integer", coperator(operator)->name);
-  return make_bool(cinteger(arg)->integer == 0);
+  return make_bool(fixnum(arg) == 0);
 }
 
 
@@ -2137,7 +2137,7 @@ static obj_t entry_positivep(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: argument must be an integer", coperator(operator)->name);
-  return make_bool(cinteger(arg)->integer > 0);
+  return make_bool(fixnum(arg) > 0);
 }
 
 
@@ -2147,7 +2147,7 @@ static obj_t entry_negativep(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: argument must be an integer", coperator(operator)->name);
-  return make_bool(cinteger(arg)->integer < 0);
+  return make_bool(fixnum(arg) < 0);
 }
 
 
@@ -2215,7 +2215,7 @@ static obj_t entry_add(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   while(type(args) == TYPE_PAIR) {
     unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
-    result += cinteger(car(args))->integer;
+    result += fixnum(car(args));
     args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
@@ -2236,7 +2236,7 @@ static obj_t entry_multiply(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   while(type(args) == TYPE_PAIR) {
     unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
-    result *= cinteger(car(args))->integer;
+    result *= fixnum(car(args));
     args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
@@ -2259,14 +2259,14 @@ static obj_t entry_subtract(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
-  result = cinteger(arg)->integer;
+  result = fixnum(arg);
   if(args == obj_empty)
     result = -result;
   else {
     while(type(args) == TYPE_PAIR) {
       unless(type(car(args)) == TYPE_INTEGER)
         error("%s: arguments must be integers", coperator(operator)->name);
-      result -= cinteger(car(args))->integer;
+      result -= fixnum(car(args));
       args = cdr(args);
     }
     assert(args == obj_empty); /* eval_args_rest always returns a list */
@@ -2290,7 +2290,7 @@ static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operand
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
-  result = cinteger(arg)->integer;
+  result = fixnum(arg);
   if(args == obj_empty) {
     if(result == 0)
       error("%s: reciprocal of zero", coperator(operator)->name);
@@ -2299,9 +2299,9 @@ static obj_t entry_divide(obj_t env, obj_t op_env, obj_t operator, obj_t operand
     while(type(args) == TYPE_PAIR) {
       unless(type(car(args)) == TYPE_INTEGER)
         error("%s: arguments must be integers", coperator(operator)->name);
-      if(cinteger(car(args))->integer == 0)
+      if(fixnum(car(args)) == 0)
         error("%s: divide by zero", coperator(operator)->name);
-      result /= cinteger(car(args))->integer;
+      result /= fixnum(car(args));
       args = cdr(args);
     }
     assert(args == obj_empty); /* eval_args_rest always returns a list */
@@ -2322,13 +2322,13 @@ static obj_t entry_lessthan(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
-  last = cinteger(arg)->integer;
+  last = fixnum(arg);
   while(type(args) == TYPE_PAIR) {
     unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
-    if (last >= cinteger(car(args))->integer)
+    if (last >= fixnum(car(args)))
       return obj_false;
-    last = cinteger(car(args))->integer;
+    last = fixnum(car(args));
     args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
@@ -2348,13 +2348,13 @@ static obj_t entry_greaterthan(obj_t env, obj_t op_env, obj_t operator, obj_t op
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
-  last = cinteger(arg)->integer;
+  last = fixnum(arg);
   while(type(args) == TYPE_PAIR) {
     unless(type(car(args)) == TYPE_INTEGER)
       error("%s: arguments must be integers", coperator(operator)->name);
-    if (last <= cinteger(car(args))->integer)
+    if (last <= fixnum(car(args)))
       return obj_false;
-    last = cinteger(car(args))->integer;
+    last = fixnum(car(args));
     args = cdr(args);
   }
   assert(args == obj_empty); /* eval_args_rest always returns a list */
@@ -2393,7 +2393,7 @@ static obj_t entry_list_tail(obj_t env, obj_t op_env, obj_t operator, obj_t oper
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg, &k);
   unless(type(k) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
-  i = cinteger(k)->integer;
+  i = fixnum(k);
   unless(i >= 0)
     error("%s: second argument must be non-negative", coperator(operator)->name);
   while(i-- > 0) {
@@ -2416,12 +2416,12 @@ static obj_t entry_list_ref(obj_t env, obj_t op_env, obj_t operator, obj_t opera
   eval_args(coperator(operator)->name, env, op_env, operands, 2, &arg, &k);
   unless(type(k) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
-  i = cinteger(k)->integer;
+  i = fixnum(k);
   unless(i >= 0)
     error("%s: second argument must be non-negative", coperator(operator)->name);
   do {
     if(arg == obj_empty)
-      error("%s: index %ld out of bounds", coperator(operator)->name, cinteger(k)->integer);
+      error("%s: index %ld out of bounds", coperator(operator)->name, fixnum(k));
     unless(type(arg) == TYPE_PAIR)
       error("%s: first argument must be a list", coperator(operator)->name);
     result = car(arg);
@@ -2654,9 +2654,9 @@ static obj_t entry_integer_to_char(obj_t env, obj_t op_env, obj_t operator, obj_
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &arg);
   unless(type(arg) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
-  unless(0 <= cinteger(arg)->integer)
+  unless(0 <= fixnum(arg))
     error("%s: first argument is out of range", coperator(operator)->name);
-  return make_character(cinteger(arg)->integer);
+  return make_character(fixnum(arg));
 }
 
 
@@ -2690,7 +2690,7 @@ static obj_t entry_make_vector(obj_t env, obj_t op_env, obj_t operator, obj_t op
       error("%s: too many arguments", coperator(operator)->name);
     fill = car(rest);
   }
-  return make_vector(cinteger(length)->integer, fill);
+  return make_vector(fixnum(length), fill);
 }
 
 
@@ -2736,10 +2736,10 @@ static obj_t entry_vector_ref(obj_t env, obj_t op_env, obj_t operator, obj_t ope
     error("%s: first argument must be a vector", coperator(operator)->name);
   unless(type(index) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
-  unless(0 <= cinteger(index)->integer && cinteger(index)->integer < cvector(vector)->length)
+  unless(0 <= fixnum(index) && fixnum(index) < cvector(vector)->length)
     error("%s: index %ld out of bounds of vector length %ld",
-          coperator(operator)->name, cinteger(index)->integer, cvector(vector)->length);
-  return vref(vector, cinteger(index)->integer);
+          coperator(operator)->name, fixnum(index), cvector(vector)->length);
+  return vref(vector, fixnum(index));
 }
 
 
@@ -2757,10 +2757,10 @@ static obj_t entry_vector_set(obj_t env, obj_t op_env, obj_t operator, obj_t ope
     error("%s: first argument must be a vector", coperator(operator)->name);
   unless(type(index) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
-  unless(0 <= cinteger(index)->integer && cinteger(index)->integer < cvector(vector)->length)
+  unless(0 <= fixnum(index) && fixnum(index) < cvector(vector)->length)
     error("%s: index %ld out of bounds of vector length %ld",
-          coperator(operator)->name, cinteger(index)->integer, cvector(vector)->length);
-  vset(vector, cinteger(index)->integer, obj);
+          coperator(operator)->name, fixnum(index), cvector(vector)->length);
+  vset(vector, fixnum(index), obj);
   return obj_undefined;
 }
 
@@ -2896,7 +2896,7 @@ static obj_t entry_make_string(obj_t env, obj_t op_env, obj_t operator, obj_t op
   eval_args_rest(coperator(operator)->name, env, op_env, operands, &args, 1, &k);
   unless(type(k) == TYPE_INTEGER)
     error("%s: first argument must be an integer", coperator(operator)->name);
-  unless(cinteger(k)->integer >= 0)
+  unless(fixnum(k) >= 0)
     error("%s: first argument must be non-negative", coperator(operator)->name);
   if (type(args) == TYPE_PAIR) {
     unless(type(car(args)) == TYPE_CHARACTER)
@@ -2905,8 +2905,8 @@ static obj_t entry_make_string(obj_t env, obj_t op_env, obj_t operator, obj_t op
       error("%s: too many arguments", coperator(operator)->name);
     c = ccharacter(car(args))->c;
   }
-  obj = make_string(cinteger(k)->integer, NULL);
-  for (i = 0; i < cinteger(k)->integer; ++i) {
+  obj = make_string(fixnum(k), NULL);
+  for (i = 0; i < fixnum(k); ++i) {
     cstring(obj)->string[i] = c;
   }
   return obj;
@@ -2971,9 +2971,9 @@ static obj_t entry_string_ref(obj_t env, obj_t op_env, obj_t operator, obj_t ope
     error("%s: first argument must be a string", coperator(operator)->name);
   unless(type(k) == TYPE_INTEGER)
     error("%s: second argument must be an integer", coperator(operator)->name);
-  unless(0 <= cinteger(k)->integer && cinteger(k)->integer < cstring(arg)->length)
+  unless(0 <= fixnum(k) && fixnum(k) < cstring(arg)->length)
     error("%s: second argument is out of range", coperator(operator)->name);
-  return make_character(cstring(arg)->string[cinteger(k)->integer]);
+  return make_character(cstring(arg)->string[fixnum(k)]);
 }
 
 /* (string=? string1 string2)
@@ -3013,13 +3013,13 @@ static obj_t entry_substring(obj_t env, obj_t op_env, obj_t operator, obj_t oper
     error("%s: second argument must be an integer", coperator(operator)->name);
   unless(type(end) == TYPE_INTEGER)
     error("%s: third argument must be an integer", coperator(operator)->name);
-  unless(0 <= cinteger(start)->integer
-         && cinteger(start)->integer <= cinteger(end)->integer
-         && cinteger(end)->integer <= cstring(arg)->length)
+  unless(0 <= fixnum(start)
+         && fixnum(start) <= fixnum(end)
+         && fixnum(end) <= cstring(arg)->length)
     error("%s: arguments out of range", coperator(operator)->name);
-  length = cinteger(end)->integer - cinteger(start)->integer;
+  length = fixnum(end) - fixnum(start);
   obj = make_string(length, NULL);
-  strncpy(cstring(obj)->string, &cstring(arg)->string[cinteger(start)->integer], length);
+  strncpy(cstring(obj)->string, &cstring(arg)->string[fixnum(start)], length);
   return obj;
 }
 
@@ -3167,9 +3167,9 @@ static obj_t make_hashtable(obj_t operator, obj_t rest, hash_t hashf, cmp_t cmpf
     obj_t arg = car(rest);
     unless(type(arg) == TYPE_INTEGER)
       error("%s: first argument must be an integer", coperator(operator)->name);
-    unless(cinteger(arg)->integer > 0)
+    unless(fixnum(arg) > 0)
       error("%s: first argument must be positive", coperator(operator)->name);
-    length = cinteger(arg)->integer;
+    length = fixnum(arg);
   }
   return make_table(length, hashf, cmpf);
 }
