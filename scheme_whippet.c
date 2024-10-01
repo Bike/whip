@@ -841,7 +841,7 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
 }
 
 
-static obj_t read_integer(FILE *stream, int c)
+static intptr_t read_integer(FILE *stream, int c)
 {
   intptr_t integer = 0;
 
@@ -851,7 +851,7 @@ static obj_t read_integer(FILE *stream, int c)
   } while(isdigit(c));
   ungetc(c, stream);
 
-  return make_integer(integer);
+  return integer;
 }
 
 
@@ -1027,7 +1027,7 @@ static obj_t read_(FILE *stream)
   if(c == EOF) return obj_eof;
 
   if(isdigit(c))
-    return read_integer(stream, c);
+    return make_integer(read_integer(stream, c));
 
   switch(c) {
     case '\'': return read_quote(stream, c);
@@ -1039,10 +1039,10 @@ static obj_t read_(FILE *stream)
     case '-': case '+': {
       int next = getc(stream);
       if(isdigit(next)) {
-        obj_t integer = read_integer(stream, next);
+        intptr_t integer = read_integer(stream, next);
         if(c == '-')
-          cinteger(integer)->integer = -fixnum(integer);
-        return integer;
+          integer = -integer;
+        return make_integer(integer);
       }
       ungetc(next, stream);
     } break; /* fall through to read as symbol */
