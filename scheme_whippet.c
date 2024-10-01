@@ -22,6 +22,7 @@
 
 #include <stdbool.h> // bool
 #include <threads.h> // thread_local
+#include <stdnoreturn.h> // deprecated in C23, wah
 
 #include "object.h"
 #include "roots.h"
@@ -131,7 +132,7 @@ thread_local struct gc_basic_stats gcstats;
  * message.
  */
 
-static void error(char *format, ...)
+noreturn static void error(char *format, ...)
 {
   va_list args;
 
