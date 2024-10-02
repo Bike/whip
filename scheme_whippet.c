@@ -173,11 +173,17 @@ static obj_t make_pair(obj_t car, obj_t cdr)
   return obj;
 }
 
-static obj_t make_promise(obj_t fulfiller)
+static obj_t make_promise(obj_t fulfiller, bool fulfilledp)
 {
   obj_t obj = gc_allocate_with_type(mutator, TYPE_PROMISE, sizeof(promise_s));
-  cpromise(obj)->fulfilledp = false;
-  cpromise(obj)->fulfiller = fulfiller;
+  // A promise contains a box (cons) which in turn contains another cons.
+  // This other cons is either (#f . operator) or (#t . value). In the former
+  // case, the promise has yet to be forced, and the value can be computed
+  // by calling the operator with no arguments.
+  // All this indirection is necessary to handle concurrency, as well as
+  // the possibility of promises containing themselves.
+  obj_t inner = make_pair(fulfilledp ? obj_true : obj_false, fulfiller);
+  cpromise(obj)->box = make_pair(inner, obj_empty);
   return obj;
 }
 
@@ -344,6 +350,31 @@ static inline void set_cdr(obj_t pair, obj_t value) {
   gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
                    gc_edge(&cpair(pair)->cdr), gc_ref_from_heap_object(value));
   atomic_store_explicit(&cpair(pair)->cdr, value, memory_order_relaxed);
+}
+
+static inline bool cas_car_strong(obj_t pair, obj_t *expected, obj_t desired) {
+  if (atomic_compare_exchange_strong_explicit(&cpair(pair)->car, expected,
+                                              desired,
+                                              memory_order_relaxed,
+                                              memory_order_relaxed)) {
+    // Doing the writer barrier after should be okay since we're not in a
+    // safepoint, but don't quote me on that.
+    gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
+                     gc_edge(&cpair(pair)->car),
+                     gc_ref_from_heap_object(desired));
+    return true;
+  } else return false;
+}
+static inline bool cas_cdr_strong(obj_t pair, obj_t *expected, obj_t desired) {
+  if (atomic_compare_exchange_strong_explicit(&cpair(pair)->cdr, expected,
+                                              desired,
+                                              memory_order_relaxed,
+                                              memory_order_relaxed)) {
+    gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
+                     gc_edge(&cpair(pair)->cdr),
+                     gc_ref_from_heap_object(desired));
+    return true;
+  } else return false;
 }
 
 /* vector access */
@@ -733,9 +764,13 @@ static void print(obj_t obj, unsigned depth, FILE *stream)
     } break;
 
     case TYPE_PROMISE: {
-      fprintf(stream, "#[%sevaluated promise ",
-              cpromise(obj)->fulfilledp ? "" : "un");
-      print(cpromise(obj)->fulfiller, depth - 1, stream);
+      obj_t inner = car(atomic_load_explicit(&cpromise(obj)->box,
+                                             memory_order_relaxed));
+      if (car(inner) == obj_true) {
+        fputs("#[fulfilled promise ", stream);
+        print(cdr(inner), depth - 1, stream);
+      } else
+        fputs("#[unfulfilled promise", stream);
       putc(']', stream);
     } break;
 
@@ -1713,9 +1748,9 @@ static obj_t entry_delay(obj_t env, obj_t op_env, obj_t operator, obj_t operands
     error("%s: illegal syntax", coperator(operator)->name);
   return make_promise(make_operator("anonymous promise",
                                     entry_interpret, obj_empty,
-                                    car(operands), env, op_env));
+                                    car(operands), env, op_env),
+                      false);
 }
-
 
 static obj_t quasiquote(obj_t env, obj_t op_env, obj_t operator, obj_t arg)
 {
@@ -2608,12 +2643,25 @@ static obj_t entry_load(obj_t env, obj_t op_env, obj_t operator, obj_t operands)
   return load(env, op_env, cstring(filename)->string);
 }
 
+/* (memoize value)
+ * Create an already-fulfilled promise. This is the only way to make a promise
+ * for which (force promise) returns a promise.
+ */
+static obj_t entry_memoize(obj_t env, obj_t op_env, obj_t operator, obj_t operands) {
+  obj_t value;
+  eval_args(coperator(operator)->name, env, op_env, operands, 1, &value);
+  return make_promise(value, true);
+}
 
 /* (force promise)
  * Forces the value of promise. If no value has been computed for the
  * promise, then a value is computed and returned. The value of the
  * promise is cached (or "memoized") so that if it is forced a second
  * time, the previously computed value is returned.
+ * If the computed value is a promise, it is itself forced and its value
+ * memoized. These recursive evaluations are in a tail context, so they
+ * do not take extra stack space.
+ * If the argument is not a promise, it is simply returned. (based on Kernel)
  * See R4RS 6.9.
  *
  * TODO: This doesn't work if the promise refers to its own value.
@@ -2622,21 +2670,44 @@ static obj_t entry_force(obj_t env, obj_t op_env, obj_t operator, obj_t operands
 {
   obj_t promise;
   eval_args(coperator(operator)->name, env, op_env, operands, 1, &promise);
-  unless(type(promise) == TYPE_PROMISE)
-    error("%s: argument must be a promise", coperator(operator)->name);
-  /* If the promise is unevaluated then apply the CDR. */
-  if (!cpromise(promise)->fulfilledp) {
-    obj_t closure = cpromise(promise)->fulfiller;
-    assert(type(closure) == TYPE_OPERATOR);
-    assert(coperator(closure)->arguments == obj_empty);
-    obj_t value = (*coperator(closure)->entry)(env, op_env, closure, obj_empty);
-    gc_write_barrier(gc_ref_from_heap_object(promise), sizeof(promise_s),
-                     gc_edge(&cpromise(promise)->fulfiller),
-                     gc_ref_from_heap_object(value));
-    cpromise(promise)->fulfiller = value;
-    cpromise(promise)->fulfilledp = true;
+  if (type(promise) != TYPE_PROMISE)
+    return promise;
+  obj_t box = atomic_load_explicit(&cpromise(promise)->box,
+                                   memory_order_relaxed);
+  while (true) {
+    obj_t inner = car(box);
+    if (car(inner) == obj_true) // already fulfilled
+      return cdr(inner);
+    obj_t thunk = cdr(inner);
+    assert(type(thunk) == TYPE_OPERATOR);
+    assert(coperator(thunk)->arguments == obj_empty);
+    obj_t value = eval(env, op_env, make_pair(thunk, obj_empty));
+    // If we got a promise back, we (try to) replace our box with its,
+    // and then loop.
+    // This will loop forever if we get ourselves back. Is that something
+    // we should bother checking for? FIXME
+    if (type(value) == TYPE_PROMISE) {
+      obj_t ibox = atomic_load_explicit(&cpromise(value)->box,
+                                        memory_order_relaxed);
+      if (atomic_compare_exchange_strong_explicit(&cpromise(promise)->box,
+                                                  &box, ibox,
+                                                  memory_order_relaxed,
+                                                  memory_order_relaxed)) {
+        gc_write_barrier(gc_ref_from_heap_object(promise), sizeof(promise_s),
+                         gc_edge(&cpromise(promise)->box),
+                         gc_ref_from_heap_object(ibox));
+        box = ibox;
+      } // someone beat us - no problem, just try again w/loaded box
+    } else { // we got a value back. try installing it.
+      obj_t new_inner = make_pair(obj_true, value);
+      if (cas_car_strong(box, &inner, new_inner))
+        return value; // done. hooray.
+      else { // someone else beat us - load and return that.
+        assert(car(inner) == obj_true);
+        return cdr(inner);
+      }
+    }
   }
-  return cpromise(promise)->fulfiller;
 }
 
 
@@ -3640,6 +3711,7 @@ static struct {char *name; entry_t entry;} funtab[] = {
   {"write-string", entry_write_string},
   {"newline", entry_newline},
   {"load", entry_load},
+  {"memoize", entry_memoize},
   {"force", entry_force},
   {"char?", entry_charp},
   {"char->integer", entry_char_to_integer},

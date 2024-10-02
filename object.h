@@ -64,8 +64,7 @@ typedef struct pair_s {
 
 typedef struct promise_s {
   struct gc_header header;
-  bool fulfilledp;
-  obj_t fulfiller;
+  _Atomic(obj_t) box;
 } promise_s;
 
 typedef struct symbol_s {

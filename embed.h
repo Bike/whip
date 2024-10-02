@@ -55,7 +55,7 @@ visit_pair_fields(pair_s *pair, visitor visit,
 static inline void
 visit_promise_fields(promise_s *promise, visitor visit,
                      struct gc_heap *heap, void *visit_data) {
-  visit(gc_edge(&promise->fulfiller), heap, visit_data);
+  visit(gc_edge(&promise->box), heap, visit_data);
 }
 
 DEFINE_FIELDLESS(symbol);
