@@ -2,6 +2,7 @@
 
 #include <stdio.h> // FILE
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <pthread.h>
 #include "header.h"
 #include "gc-ephemeron.h"
@@ -58,7 +59,7 @@ typedef struct type_s {
 
 typedef struct pair_s {
   struct gc_header header;
-  obj_t car, cdr;               /* first and second projections */
+  _Atomic(obj_t) car, cdr;        /* first and second projections */
 } pair_s;
 
 typedef struct promise_s {

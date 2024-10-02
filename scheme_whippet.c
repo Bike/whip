@@ -316,8 +316,12 @@ static obj_t make_ephemeron(obj_t key, obj_t value) {
 
 /* list access */
 
-static inline obj_t car(obj_t pair) { return cpair(pair)->car; }
-static inline obj_t cdr(obj_t pair) { return cpair(pair)->cdr; }
+static inline obj_t car(obj_t pair) {
+  return atomic_load_explicit(&cpair(pair)->car, memory_order_relaxed);
+}
+static inline obj_t cdr(obj_t pair) {
+  return atomic_load_explicit(&cpair(pair)->cdr, memory_order_relaxed);
+}
 static inline obj_t caar(obj_t pair) { return car(car(pair)); }
 static inline obj_t cadr(obj_t pair) { return car(cdr(pair)); }
 static inline obj_t cdar(obj_t pair) { return cdr(car(pair)); }
@@ -334,12 +338,12 @@ static inline obj_t cdddr(obj_t pair) { return cdr(cdr(cdr(pair))); }
 static inline void set_car(obj_t pair, obj_t value) {
   gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
                    gc_edge(&cpair(pair)->car), gc_ref_from_heap_object(value));
-  cpair(pair)->car = value;
+  atomic_store_explicit(&cpair(pair)->car, value, memory_order_relaxed);
 }
 static inline void set_cdr(obj_t pair, obj_t value) {
   gc_write_barrier(gc_ref_from_heap_object(pair), sizeof(pair_s),
                    gc_edge(&cpair(pair)->cdr), gc_ref_from_heap_object(value));
-  cpair(pair)->cdr = value;
+  atomic_store_explicit(&cpair(pair)->cdr, value, memory_order_relaxed);
 }
 
 /* vector access */
